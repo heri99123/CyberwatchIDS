@@ -60,8 +60,11 @@ Lihat tabel lengkap di [README.md](README.md#konfigurasi-environment). Ringkasan
 | `LOGIN_LOCKOUT_SECONDS` | `900` | Lama kunci akun, detik (60–86400) |
 | `SMTP_ENABLED` / `SMTP_HOST` | `false` / kosong | Email **nonaktif** by default; lihat tabel lengkap di README |
 | `ALERT_EMAIL_MIN_SEVERITY` | `CRITICAL` | Ambang severity email alert |
+| `INGEST_RATE_PER_SECOND` / `INGEST_RATE_BURST` | `50` / `200` | Rate limit khusus `/api/ingest/*` |
+| `INGEST_MAX_BODY_BYTES` | `1048576` | Batas body ingest |
+| `SYSLOG_UDP_PORT` / `SYSLOG_UDP_API_KEY` | `0` / kosong | Listener UDP opsional; butuh key `read-write` |
 
-> Rate limiting tidak diterapkan pada `/api/health`, `/ws`, dan static assets.
+> Rate limiting tidak diterapkan pada `/api/health`, `/ws`, dan static assets. Endpoint `/api/ingest/*` memakai **limiter terpisah** yang lebih longgar, karena log shipper mengirim traffic jauh lebih padat daripada API interaktif.
 > Rate limit berlaku **per IP**, sedangkan account lockout berlaku **per akun** — keduanya saling melengkapi. Counter lockout tersimpan di tabel `users` (`failed_login_attempts`, `locked_until`) dan otomatis di-reset saat login berhasil.
 
 ## Production Build

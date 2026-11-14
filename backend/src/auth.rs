@@ -6,6 +6,7 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use rand::Rng;
+use sha2::{Digest, Sha256};
 
 /// JWT claims payload
 #[derive(Debug, Serialize, Deserialize)]
@@ -127,9 +128,18 @@ pub fn extract_auth_user(
             }
         }
     }
-    // API key auth is handled separately in route handlers (needs DB access)
+    // API key auth needs DB access, so it is resolved by
+    // `routes::auth::extract_ingest_principal` for ingest endpoints.
     let _ = api_key_header;
     None
+}
+
+/// Hash an API key for storage and lookup. Keys are 192-bit random tokens, so a
+/// fast cryptographic hash is sufficient (unlike user passwords, which use
+/// Argon2id). The raw key is shown once at creation and never persisted.
+pub fn hash_api_key(key: &str) -> String {
+    let digest = Sha256::digest(key.trim().as_bytes());
+    hex_encode(digest.as_slice())
 }
 
 /// Generate a random API key with cw_ prefix

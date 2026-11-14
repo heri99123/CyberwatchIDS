@@ -24,6 +24,10 @@ const newKeyPerms = ref('read')
 const createdKey = ref('')
 const createKeyLoading = ref(false)
 
+// Traffic ingest self-test (Task #29)
+const ingestTesting = ref(false)
+const ingestTestResult = ref('')
+
 // New incident form
 const newIncident = ref({ title: '', description: '', severity: 'medium' })
 const createIncidentLoading = ref(false)
@@ -147,6 +151,34 @@ async function handleCreateKey() {
     console.error('Failed to create API key:', e)
   } finally {
     createKeyLoading.value = false
+  }
+}
+
+async function handleTestIngest() {
+  if (!createdKey.value) return
+  ingestTesting.value = true
+  ingestTestResult.value = ''
+  try {
+    const res = await fetch('/api/ingest/webhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': createdKey.value },
+      body: JSON.stringify({
+        method: 'GET',
+        path: '/api/products',
+        query: { id: "1' UNION SELECT username,password FROM users--" },
+        sourceIp: '203.0.113.42',
+        destination: 'demo.example.com',
+        headers: { 'user-agent': 'ingest-self-test' }
+      })
+    })
+    const data = await res.json()
+    ingestTestResult.value = res.ok
+      ? `Berhasil — ${data.detections ?? 0} deteksi, ${data.eventsCreated ?? 0} event masuk dashboard`
+      : `Gagal (${res.status}): ${data.error ?? 'unknown error'}`
+  } catch (e: any) {
+    ingestTestResult.value = `Gagal: ${e.message || 'network error'}`
+  } finally {
+    ingestTesting.value = false
   }
 }
 
@@ -391,6 +423,28 @@ const statusColors: Record<string, string> = {
             <code class="flex-1 px-3 py-2 bg-cyber-bg rounded text-xs text-cyber-accent font-mono break-all">{{ createdKey }}</code>
             <button @click="copyKey" class="px-3 py-1 bg-cyber-accent/20 text-cyber-accent rounded text-xs hover:bg-cyber-accent/30">Copy</button>
           </div>
+        </div>
+      </div>
+
+      <div class="bg-cyber-card border border-cyber-border rounded-lg p-4">
+        <h3 class="text-sm font-semibold text-cyber-text mb-2">Integrasi Traffic Real</h3>
+        <p class="text-xs text-cyber-textdim mb-3">
+          Kirim request dari reverse proxy, WAF, atau log shipper. Gunakan API key ber-permission
+          <span class="text-cyber-accent">Read &amp; Write</span> pada header
+          <code class="font-mono">X-API-Key</code>. Event yang terdeteksi otomatis masuk dashboard,
+          alert, dan email (jika org mengaktifkan email alerts).
+        </p>
+        <div class="space-y-1 text-xs font-mono text-cyber-textdim">
+          <div>POST /api/ingest/webhook &nbsp;·&nbsp; JSON: method, path, query, body, headers, sourceIp</div>
+          <div>POST /api/ingest/syslog &nbsp;·&nbsp; text/plain atau lines JSON</div>
+          <div>SYSLOG_UDP_PORT + SYSLOG_UDP_API_KEY &nbsp;·&nbsp; listener UDP opsional</div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-3">
+          <button @click="handleTestIngest" :disabled="!createdKey || ingestTesting" class="px-4 py-2 bg-cyber-accent text-white rounded-md text-sm font-medium hover:bg-cyber-accent/90 disabled:opacity-50">
+            {{ ingestTesting ? 'Mengirim...' : 'Kirim contoh serangan (self-test)' }}
+          </button>
+          <span v-if="!createdKey" class="text-xs text-cyber-textmuted">Buat API key dulu untuk self-test.</span>
+          <span v-else-if="ingestTestResult" class="text-xs text-cyber-accent">{{ ingestTestResult }}</span>
         </div>
       </div>
 

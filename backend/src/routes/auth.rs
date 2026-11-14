@@ -369,6 +369,71 @@ pub fn extract_auth_user(headers: &HeaderMap) -> AppResult<auth::AuthUser> {
     auth::extract_auth_user(auth_header, api_key).ok_or(AppError::Unauthorized)
 }
 
+/// Principal for the traffic-ingest endpoints (Task #29).
+/// Ingest accepts either an API key (for external shippers) or a JWT (for
+/// testing from the dashboard). API keys are always resolved to their org.
+#[derive(Debug, Clone)]
+pub struct IngestPrincipal {
+    pub org_id: String,
+    pub via: &'static str,
+    pub key_id: Option<String>,
+}
+
+/// Authenticate an ingest request. `X-API-Key` takes precedence; when present
+/// but invalid we fail instead of silently falling back to JWT.
+pub fn extract_ingest_principal(
+    state: &SharedState,
+    headers: &HeaderMap,
+) -> AppResult<IngestPrincipal> {
+    if let Some(raw) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+        let key = raw.trim();
+        if key.is_empty() {
+            return Err(AppError::Unauthorized);
+        }
+
+        let hash = auth::hash_api_key(key);
+        let conn = get_conn(&state.db)?;
+        let found: Option<(String, String, String)> = conn
+            .query_row(
+                "SELECT key_id, org_id, permissions FROM api_keys WHERE key_hash = ? AND revoked = 0",
+                [&hash],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .ok();
+
+        let (key_id, org_id, permissions) = found.ok_or(AppError::Unauthorized)?;
+        if permissions != "read-write" {
+            return Err(AppError::Forbidden(
+                "Ingest requires an API key with read-write permission".to_string(),
+            ));
+        }
+
+        conn.execute(
+            "UPDATE api_keys SET last_used = datetime('now') WHERE key_id = ?",
+            [&key_id],
+        )?;
+
+        return Ok(IngestPrincipal {
+            org_id,
+            via: "api_key",
+            key_id: Some(key_id),
+        });
+    }
+
+    let user = extract_auth_user(headers)?;
+    Ok(IngestPrincipal {
+        org_id: user.org_id,
+        via: "jwt",
+        key_id: None,
+    })
+}
+
 /// Write an audit log entry
 pub fn audit_log(
     conn: &rusqlite::Connection,

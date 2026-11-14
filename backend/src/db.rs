@@ -50,6 +50,7 @@ pub fn init_database(db_path: &str) -> anyhow::Result<DbPool> {
         create_schema(&conn)?;
         run_migrations(&conn)?;
         create_indexes(&conn)?;
+        seed_defaults(&conn)?;
     }
 
     tracing::info!("[DB] Database initialized at {}", db_path);
@@ -181,6 +182,7 @@ fn create_schema(conn: &rusqlite::Connection) -> Result<(), DbError> {
             org_id TEXT NOT NULL,
             name TEXT NOT NULL,
             key_prefix TEXT NOT NULL,
+            key_hash TEXT,
             permissions TEXT DEFAULT 'read',
             last_used TEXT,
             created_at TEXT DEFAULT (datetime('now')),
@@ -247,6 +249,9 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), DbError> {
         // Account lockout (Task #26). Safe to re-run: duplicate-column errors are ignored.
         "ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN locked_until INTEGER",
+        // API key hashes (Task #29). Keys created before this migration have
+        // NULL key_hash and must be rotated — they were never verifiable.
+        "ALTER TABLE api_keys ADD COLUMN key_hash TEXT",
     ];
 
     for sql in &migrations {
@@ -279,12 +284,66 @@ fn create_indexes(conn: &rusqlite::Connection) -> Result<(), DbError> {
         "CREATE INDEX IF NOT EXISTS idx_audit_org ON audit_logs(org_id)",
         "CREATE INDEX IF NOT EXISTS idx_incidents_org ON incidents(org_id)",
         "CREATE INDEX IF NOT EXISTS idx_notif_org ON notifications(org_id)",
+        "CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)",
     ];
 
     for sql in &indexes {
         conn.execute(sql, []).ok();
     }
 
+    Ok(())
+}
+
+/// Seed built-in IDS rules on a fresh database (Task #29 prerequisite).
+///
+/// Before this existed, `ids_rules` was created empty: a fresh Docker/VPS
+/// deployment loaded 0 rules, so real traffic produced zero detections. The
+/// patterns below are the exact 27 rules from the original deployment.
+/// `INSERT OR IGNORE` keeps user-modified / disabled rules intact on upgrades.
+fn seed_defaults(conn: &rusqlite::Connection) -> Result<(), DbError> {
+    // (rule_id, name, description, attack_type, severity, pattern, flags, cve, action)
+    const RULES: &[(&str, &str, &str, &str, &str, &str, &str, Option<&str>, &str)] = &[
+        ("IDS-001", "SQL Injection - UNION SELECT", "Detects UNION-based SQL injection attempts in parameters", "SQL Injection", "CRITICAL", r#"(?i)(union\s*select|union\s+all\s+select)"#, "i", Some("CVE-2012-2122"), "block"),
+        ("IDS-002", "SQL Injection - Boolean Blind", "Detects boolean-based blind SQL injection (AND 1=1 / OR 1=1)", "SQL Injection", "HIGH", r#"(?i)(\bor\s+1\s*=\s*1|\band\s+1\s*=\s*1|\bor\s+1\s*=\s*2|\band\s+1\s*=\s*2)"#, "i", Some("CVE-2012-2122"), "block"),
+        ("IDS-003", "SQL Injection - Time-based", "Detects time-based blind SQL injection using SLEEP/BENCHMARK", "SQL Injection", "HIGH", r#"(?i)(sleep\s*\(|benchmark\s*\(|pg_sleep\s*\(|waitfor\s+delay)"#, "i", Some("CVE-2012-2122"), "block"),
+        ("IDS-004", "SQL Injection - Stacked Queries", "Detects stacked SQL queries with semicolons", "SQL Injection", "HIGH", r#"(?i)(;\s*(drop|insert|update|delete|exec|execute)\s)"#, "i", Some("CVE-2012-2122"), "block"),
+        ("IDS-005", "SQL Injection - Error-based", "Detects error-based SQL injection extraction patterns", "SQL Injection", "HIGH", r#"(?i)(extractvalue\s*\(|updatexml\s*\(|convert\s*\(|floor\s*\(\s*rand\s*\()"#, "i", Some("CVE-2012-2122"), "alert"),
+        ("IDS-010", "XSS - Script Tag Injection", "Detects <script> tag injection attempts", "Cross-Site Scripting (XSS)", "HIGH", r#"(?i)<\s*script[^>]*>|<\s*/\s*script\s*>"#, "i", None, "block"),
+        ("IDS-011", "XSS - Event Handler", "Detects XSS via inline event handlers (onerror, onload, etc.)", "Cross-Site Scripting (XSS)", "HIGH", r#"(?i)(on(error|load|click|mouseover|focus|blur|change|submit|keyup|keydown)\s*=)"#, "i", None, "block"),
+        ("IDS-012", "XSS - JavaScript URI", "Detects javascript: URI scheme in attributes", "Cross-Site Scripting (XSS)", "HIGH", r#"(?i)javascript\s*:"#, "i", None, "block"),
+        ("IDS-013", "XSS - SVG Embed", "Detects XSS via SVG onload / SVG use tag", "Cross-Site Scripting (XSS)", "HIGH", r#"(?i)<\s*svg[^>]*onload|<\s*use\s"#, "i", None, "block"),
+        ("IDS-014", "XSS - Data URI", "Detects XSS via data: URI scheme with text/html", "Cross-Site Scripting (XSS)", "MEDIUM", r#"(?i)data\s*:[^;]*;base64"#, "i", None, "alert"),
+        ("IDS-020", "Path Traversal - Dot-Dot-Slash", "Detects directory traversal via ../ or ..\\", "Path Traversal", "HIGH", r#"(\.\./|\.\.\\|%2e%2e%2f|%2e%2e/|%2e%2e\\|%2e%2e%5c)"#, "i", Some("CVE-2020-3452"), "block"),
+        ("IDS-021", "Path Traversal - Absolute Path", "Detects absolute path access attempts (Linux /etc/passwd, Windows C:\\\\)", "Path Traversal", "HIGH", r#"(?i)(/etc/passwd|/etc/shadow|/proc/self|c:\\windows\\system32|c:\\windows\\win\.ini)"#, "i", Some("CVE-2010-2861"), "block"),
+        ("IDS-022", "Path Traversal - Null Byte", "Detects null byte injection for path truncation", "Path Traversal", "HIGH", r#"(%00|\x00|0x00)"#, "i", None, "block"),
+        ("IDS-030", "Command Injection - Shell Metacharacters", "Detects OS command injection via shell metacharacters", "Command Injection", "CRITICAL", r#"([|;&`$]\s*(cat|ls|id|whoami|uname|ping|wget|curl|nc|bash|sh|cmd|powershell)\s)"#, "i", Some("CVE-2017-5638"), "block"),
+        ("IDS-031", "Command Injection - Backtick Substitution", "Detects backtick command substitution", "Command Injection", "HIGH", r#"(`[^`]+`|\$\([^)]+\))"#, "", None, "block"),
+        ("IDS-032", "Command Injection - PowerShell", "Detects PowerShell command injection patterns", "Command Injection", "CRITICAL", r#"(?i)(powershell\s|invoke-|iex\s|downloadstring|downloadfile|hidden\s)"#, "i", None, "block"),
+        ("IDS-040", "Log4Shell - JNDI Lookup", "Detects Log4j JNDI injection (${jndi:...})", "Log4j Injection", "CRITICAL", r#"\$\{jndi:"#, "i", Some("CVE-2021-44228"), "block"),
+        ("IDS-041", "JNDI - LDAP/RMI/DNS", "Detects JNDI lookups via ldap://, rmi://, dns:// protocols", "Log4j Injection", "CRITICAL", r#"(?i)(\$\{(jndi|lower|upper|env|sys|date):.*(ldap|rmi|dns)://)"#, "i", Some("CVE-2021-44228"), "block"),
+        ("IDS-050", "XXE - External Entity Declaration", "Detects XML External Entity (XXE) injection via DOCTYPE/ENTITY", "XXE Injection", "HIGH", r#"(?i)(<!DOCTYPE[^>]*\[|<!ENTITY\s|SYSTEM\s+"|PUBLIC\s+")"#, "i", Some("CVE-2021-21307"), "block"),
+        ("IDS-060", "OGNL Injection", "Detects Apache Struts / Confluence OGNL expression injection", "OGNL Injection", "CRITICAL", r#"(?i)(%\{|#_memberAccess|@java|@runtime|getRuntime\(\)|new\s+java)"#, "i", Some("CVE-2017-5638"), "block"),
+        ("IDS-070", "SSRF - Internal IP Access", "Detects Server-Side Request Forgery to internal IPs", "SSRF", "HIGH", r#"(?i)(127\.0\.0\.1|localhost|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.169\.254|0\.0\.0\.0|::1|fd[0-9a-f]{2}:)"#, "i", Some("CVE-2023-26605"), "alert"),
+        ("IDS-080", "LFI - Local File Inclusion", "Detects attempts to include local files via php://, file://, data:// wrappers", "LFI/RFI", "HIGH", r#"(?i)(php://|file://|data://|zip://|phar://|expect://|input://)"#, "i", Some("CVE-2019-5418"), "block"),
+        ("IDS-090", "Web Shell Upload", "Detects common web shell filenames being accessed", "Web Shell", "CRITICAL", r#"(?i)(c99\.php|r57\.php|wso\.php|shell\.php|b374k\.php|cmd\.php|eval\.php|zencart|weevely)"#, "i", None, "block"),
+        ("IDS-091", "PHP Code Injection", "Detects PHP eval/assert/system execution in parameters", "Code Injection", "CRITICAL", r#"(?i)(eval\s*\(|assert\s*\(|base64_decode\s*\(|gzinflate\s*\(|str_rot13\s*\(|system\s*\(|passthru\s*\(|exec\s*\(|shell_exec\s*\()"#, "i", Some("CVE-2016-10033"), "block"),
+        ("IDS-100", "Known Scanner User-Agent", "Detects automated vulnerability scanners in User-Agent", "Scanner", "MEDIUM", r#"(?i)(sqlmap|nikto|nmap|masscan|nessus|burp|acunetix|nuclei|hydra|dirbuster|gobuster|wpscan|metasploit|fimap|w3af)"#, "i", None, "alert"),
+        ("IDS-101", "Directory Fuzzing", "Detects directory brute-force attempts", "Scanner", "MEDIUM", r#"(?i)(/\.git/|/\.env|/\.svn/|/backup|/admin\.php|/phpmyadmin|/wp-admin|/xmlrpc\.php|/\.well-known)"#, "i", None, "alert"),
+        ("IDS-110", "RDP Brute Force (BlueKeep check)", "Detects RDP connection patterns that may target CVE-2019-0708", "RDP Attack", "HIGH", r#"(?i)(\x03\x00\x00\x0b\x06\xd0\x00\x00\x12|cookie\s*:\s*mstshash)"#, "i", Some("CVE-2019-0708"), "block"),
+    ];
+
+    let mut inserted = 0usize;
+    for &(rule_id, name, description, attack_type, severity, pattern, flags, cve, action) in RULES {
+        inserted += conn
+            .execute(
+                "INSERT OR IGNORE INTO ids_rules (rule_id, rule_name, rule_description, attack_type, severity, pattern, pattern_flags, related_cve, action, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                rusqlite::params![rule_id, name, description, attack_type, severity, pattern, flags, cve, action],
+            )
+            .map_err(|e| DbError::Schema(format!("seed ids_rules {}: {}", rule_id, e)))?;
+    }
+    if inserted > 0 {
+        tracing::info!("[DB] Seeded {} built-in IDS rules", inserted);
+    }
     Ok(())
 }
 

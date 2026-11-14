@@ -64,60 +64,13 @@ pub async fn attack(
 
     let result = state.ids.inspect_request(&req_data);
 
-    let mut logged_events = Vec::new();
-    for detection in &result.detections {
-        let event_id = state.ids.log_security_event(detection, Some(&user.org_id))?;
-
-        let mut detection_json = serde_json::to_value(detection).unwrap_or(json!({}));
-        let event_with_id = if let Some(obj) = detection_json.as_object_mut() {
-            obj.insert("id".to_string(), json!(event_id));
-            obj.insert("timestamp".to_string(), json!(chrono::Utc::now().to_rfc3339()));
-            Value::Object(obj.clone())
-        } else {
-            json!({})
-        };
-
-        logged_events.push(event_with_id.clone());
-
-        state.broadcast("events", &event_with_id, Some(&user.org_id)).await;
-
-        if detection.severity == "CRITICAL" || detection.severity == "HIGH" {
-            let alert = json!({
-                "event_id": event_id,
-                "alert_type": detection.attack_type,
-                "message": format!("{} severity: {} from {}", detection.severity, detection.rule_name, detection.source_ip),
-                "timestamp": chrono::Utc::now().to_rfc3339(),
-            });
-            state.broadcast("alerts", &alert, Some(&user.org_id)).await;
-
-            // Email alert (Task #27): org opt-in + severity threshold, fire-and-forget.
-            if state.mailer.is_enabled()
-                && crate::mailer::meets_threshold(&detection.severity, state.mailer.min_severity())
-                && crate::mailer::org_email_alerts_enabled(&state.db, &user.org_id)
-            {
-                let mut recipients = crate::mailer::org_alert_recipients(&state.db, &user.org_id);
-                if recipients.is_empty() {
-                    recipients = state.mailer.fallback_recipients().to_vec();
-                }
-                if !recipients.is_empty() {
-                    let (subject, html) = crate::mailer::alert_email(
-                        &detection.severity,
-                        &detection.attack_type,
-                        &detection.rule_name,
-                        &detection.source_ip,
-                        &detection.path,
-                        &chrono::Utc::now().to_rfc3339(),
-                    );
-                    crate::mailer::spawn_send(state.mailer.clone(), recipients, subject, html);
-                }
-            }
-        }
-    }
-
-    if result.total_detections > 0 {
-        let stats = state.ids.get_stats(Some(&user.org_id));
-        state.broadcast("stats", &stats, Some(&user.org_id)).await;
-    }
+    // Same pipeline as webhook/syslog ingest: persist, broadcast, email alerts.
+    let logged_events = crate::event_pipeline::publish_detections(
+        &state,
+        &user.org_id,
+        &result.detections,
+    )
+    .await?;
 
     Ok(Json(json!({"fired": true, "detections": result.total_detections, "events": logged_events})))
 }

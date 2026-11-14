@@ -307,9 +307,12 @@ pub async fn create_api_key(
         _ => "read",
     };
 
+    // Store only the SHA-256 hash. The raw key is returned once and never
+    // recoverable; ingest endpoints look it up by hash (Task #29).
+    let key_hash = auth::hash_api_key(&full_key);
     conn.execute(
-        "INSERT INTO api_keys (key_id, org_id, name, key_prefix, permissions) VALUES (?, ?, ?, ?, ?)",
-        rusqlite::params![key_id, &user.org_id, body.name, key_prefix, perms],
+        "INSERT INTO api_keys (key_id, org_id, name, key_prefix, permissions, key_hash) VALUES (?, ?, ?, ?, ?, ?)",
+        rusqlite::params![key_id, &user.org_id, body.name, key_prefix, perms, key_hash],
     )?;
 
     audit_log(&conn, &user.org_id, &user.id, &user.email, "create_apikey", "api_key", &json!({"name": body.name, "keyId": key_id}));
@@ -320,6 +323,7 @@ pub async fn create_api_key(
         "key": full_key,
         "permissions": perms,
         "note": "Save this key securely. It will not be shown again.",
+        "hint": "Send it as X-API-Key to /api/ingest/webhook or /api/ingest/syslog (requires Read & Write permission).",
     })))
 }
 

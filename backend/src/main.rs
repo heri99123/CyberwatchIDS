@@ -19,6 +19,7 @@ mod state;
 mod error;
 mod security;
 mod mailer;
+mod event_pipeline;
 
 use state::AppState;
 
@@ -64,6 +65,12 @@ async fn main() -> anyhow::Result<()> {
         mailer,
     });
 
+    // Optional UDP syslog listener (Task #29). Disabled unless both
+    // SYSLOG_UDP_PORT and a valid read-write SYSLOG_UDP_API_KEY are configured.
+    if let Some((port, org_id)) = routes::ingest::udp_syslog_config(&state.db) {
+        routes::ingest::spawn_udp_syslog_listener(state.clone(), port, org_id);
+    }
+
     // Build router
     let app = build_router(state.clone());
 
@@ -76,11 +83,13 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("  Dashboard:  http://localhost:{}", port);
     tracing::info!("  WebSocket:  ws://localhost:{}/ws", port);
     tracing::info!("  API Base:   http://localhost:{}/api", port);
+    tracing::info!("  Ingest:     POST /api/ingest/webhook | /api/ingest/syslog");
     tracing::info!("============================================");
     tracing::info!("");
     tracing::info!("[IDS] Engine initialized with {} rules", state.ids.rule_count());
     tracing::info!("[Auth] JWT authentication enabled");
     tracing::info!("[Mail] Email notifications: {}", if state.mailer.is_enabled() { "enabled" } else { "disabled" });
+    tracing::info!("[Ingest] Webhook + syslog endpoints ready (API key or JWT)");
     tracing::info!("[Multi-tenant] Organization data isolation active");
     tracing::info!("");
 
@@ -194,8 +203,55 @@ fn build_router(state: Arc<AppState>) -> Router {
         api_routes.layer(GovernorLayer { config: conf })
     };
 
+    // --- Ingest endpoints (Task #29) ---
+    // Traffic shippers need far higher throughput than the interactive API, so
+    // they get a dedicated limiter and body cap. Authentication is still
+    // enforced per request by API key / JWT inside the handlers.
+    let ingest_per_second: u64 = std::env::var("INGEST_RATE_PER_SECOND")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(50);
+    let ingest_burst: u32 = std::env::var("INGEST_RATE_BURST")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(200);
+    let ingest_body_limit: usize = std::env::var("INGEST_MAX_BODY_BYTES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(1_048_576);
+
+    let ingest_routes = Router::new()
+        .route("/api/ingest/webhook", axum::routing::post(routes::ingest::webhook))
+        .route("/api/ingest/syslog", axum::routing::post(routes::ingest::syslog))
+        .layer(axum::extract::DefaultBodyLimit::max(ingest_body_limit));
+
+    let ingest_routes = if trust_proxy {
+        let mut builder = GovernorConfigBuilder::default();
+        let mut builder = builder.key_extractor(SmartIpKeyExtractor);
+        builder.per_second(ingest_per_second).burst_size(ingest_burst);
+        let conf = Arc::new(
+            builder
+                .finish()
+                .expect("invalid ingest rate-limit configuration"),
+        );
+        ingest_routes.layer(GovernorLayer { config: conf })
+    } else {
+        let conf = Arc::new(
+            GovernorConfigBuilder::default()
+                .per_second(ingest_per_second)
+                .burst_size(ingest_burst)
+                .finish()
+                .expect("invalid ingest rate-limit configuration"),
+        );
+        ingest_routes.layer(GovernorLayer { config: conf })
+    };
+
     Router::new()
         .merge(api_routes)
+        .merge(ingest_routes)
         // Health check (not rate-limited — used by monitoring/load balancers)
         .route("/api/health", axum::routing::get(routes::health::health))
         // WebSocket (long-lived; rate limiting at handshake is not desired)

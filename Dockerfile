@@ -47,5 +47,8 @@ ENV DATABASE_PATH=/app/data/cve-database.db
 ENV RUST_LOG=info,cyberwatch=debug
 
 EXPOSE 8421
+# Optional syslog UDP listener: set SYSLOG_UDP_PORT (e.g. 5514) and publish with
+# `docker run -p 5514:5514/udp`. Use a port >= 1024 for the non-root service user.
+EXPOSE 5514/udp
 
 CMD ["/app/cyberwatch-ids"]
