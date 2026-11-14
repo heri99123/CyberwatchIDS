@@ -6,7 +6,6 @@ description = "CyberWatch IDS - Rust backend for multi-tenant SaaS intrusion det
 license = "AGPL-3.0-only"
 authors = ["Heri Muhrial <heri99123@users.noreply.github.com>"]
 repository = "https://github.com/heri99123/CyberwatchIDS"
-homepage = "https://github.com/heri99123/CyberwatchIDS"
 readme = "../README.md"
 keywords = ["ids", "security", "intrusion-detection", "cybersecurity", "siem"]
 categories = ["security", "web-programming::http-server"]
@@ -47,7 +46,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Rate limiting (Task #25)
-tower-governor = { version = "0.5", features = ["axum", "tracing"] }
+# NOTE: the crates.io package is literally named `tower_governor` (underscore).
+# The sparse index does not normalise hyphen <-> underscore, so `tower-governor`
+# fails with "no matching package named ...". Rust imports use the same spelling.
+tower_governor = { version = "0.5", features = ["axum", "tracing"] }
 
 # Email notifications (Task #27) — async SMTP over rustls 0.21/`ring`.
 # default-features = false avoids native-tls/OpenSSL. `tokio1-rustls-tls`

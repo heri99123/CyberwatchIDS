@@ -1,38 +1,81 @@
 name: Deploy to VPS
 
+# Manual only. Auto-deploy on every push would fail while the VPS is not
+# provisioned (and would ship untested builds). Run this after a green
+# "Build CyberWatch IDS" workflow, once the VPS secrets below are configured.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: "Build workflow run ID (leave empty = latest successful build)"
+        required: false
+        type: string
 
 jobs:
   deploy:
     name: Deploy to production VPS
     runs-on: ubuntu-latest
-    needs: build-rust
     if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download binary artifact
+      - name: Verify VPS secrets are configured
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_USER" ] || [ -z "$VPS_SSH_KEY" ]; then
+            echo "::error::VPS secrets missing. Set VPS_HOST, VPS_USER and VPS_SSH_KEY in repo Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "VPS secrets present."
+
+      # Artifacts live on the *build* workflow run, not this one. Resolve that
+      # run id and pass it to download-artifact via `run-id` + github-token.
+      - name: Resolve build run id
+        id: build_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          if [ -n "$INPUT_RUN_ID" ]; then
+            RUN_ID="$INPUT_RUN_ID"
+          else
+            RUN_ID=$(gh api "repos/${{ github.repository }}/actions/workflows/build.yml/runs?status=success&per_page=10" \
+              --jq '.workflow_runs[0].id // empty')
+          fi
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No successful build run found. Run the Build workflow first, or pass build_run_id."
+            exit 1
+          fi
+          echo "Using build run $RUN_ID"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Download Rust binary artifact
         uses: actions/download-artifact@v4
         with:
           name: cyberwatch-ids-binary
+          run-id: ${{ steps.build_run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download frontend artifact
         uses: actions/download-artifact@v4
         with:
           name: cyberwatch-ids-frontend
           path: dist/
+          run-id: ${{ steps.build_run.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare deployment package
         run: |
           mkdir -p deploy/dist deploy/data
           cp cyberwatch-ids deploy/
-          cp -r dist/* deploy/dist/
-          cp -r data/* deploy/data/ 2>/dev/null || true
-          cp deploy.sh deploy/ 2>/dev/null || true
+          cp -r dist/. deploy/dist/
+          cp -r data/. deploy/data/ 2>/dev/null || true
+          cp deploy.sh deploy/
+          chmod +x deploy/deploy.sh
           tar -czf deploy.tar.gz deploy/
 
       - name: Upload to VPS via SCP
@@ -57,5 +100,5 @@ jobs:
             tar -xzf deploy.tar.gz
             cd deploy
             chmod +x deploy.sh
-            ./deploy.sh
-            rm -rf /tmp/deploy.tar.gz /tmp/deploy
+            sudo ./deploy.sh
+            sudo rm -rf /tmp/deploy.tar.gz /tmp/deploy

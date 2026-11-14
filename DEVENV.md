@@ -83,8 +83,20 @@ chmod +x deploy.sh
 sudo ./deploy.sh
 ```
 
-Atau setup auto-deploy via `.github/workflows/deploy.yml` dengan GitHub secrets:
+### Auto-deploy (opsional)
+
+Workflow `deploy.yml` **hanya jalan manual** (`Actions > Deploy to VPS > Run workflow`),
+supaya push harian tidak gagal dan tidak mengirim build yang belum lolos CI.
+Workflow mengambil artefak dari run **Build CyberWatch IDS** terakhir yang sukses
+(bisa juga diisi `build_run_id` secara eksplisit).
+
+Siapkan GitHub secrets terlebih dahulu:
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_KEY`
 - `VPS_PORT` (optional, default 22)
+
+`deploy.sh` akan membuat `/etc/cyberwatch-ids.env` (mode 600) berisi `JWT_SECRET`
+acak yang dipertahankan saat redeploy, lalu menjalankan service via systemd.
+Pastikan reverse proxy (nginx/Caddy) **menimpa** `X-Forwarded-For`, karena
+`RATE_LIMIT_TRUST_PROXY=true` aktif di konfigurasi production.
