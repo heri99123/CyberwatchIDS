@@ -63,8 +63,14 @@ Lihat tabel lengkap di [README.md](README.md#konfigurasi-environment). Ringkasan
 | `INGEST_RATE_PER_SECOND` / `INGEST_RATE_BURST` | `50` / `200` | Rate limit khusus `/api/ingest/*` |
 | `INGEST_MAX_BODY_BYTES` | `1048576` | Batas body ingest |
 | `SYSLOG_UDP_PORT` / `SYSLOG_UDP_API_KEY` | `0` / kosong | Listener UDP opsional; butuh key `read-write` |
+| `REPORT_SCHEDULE_ENABLED` | `false` | Aktifkan laporan harian otomatis (butuh SMTP + opt-in per org) |
+| `REPORT_SCHEDULE_HOUR_UTC` | `1` | Jam pengiriman UTC (0–23), dicek tiap menit |
+| `REPORT_SCHEDULE_KIND` | `compliance` | `compliance` / `security-summary` / `incident-report` / `audit-trail` |
+| `REPORT_SCHEDULE_DAYS` | `1` | Rentang data lookback, 1–30 hari |
+| `REPORT_SCHEDULE_RECIPIENTS` | kosong | Kosong = admin aktif org, fallback `ALERT_EMAIL_TO` |
 
-> Rate limiting tidak diterapkan pada `/api/health`, `/ws`, dan static assets. Endpoint `/api/ingest/*` memakai **limiter terpisah** yang lebih longgar, karena log shipper mengirim traffic jauh lebih padat daripada API interaktif.
+> Rate limiting tidak diterapkan pada `/api/health`, `/ws`, dan static assets.
+> **Laporan (Task #31):** `GET /api/reports/:kind?format=csv|pdf|json&from=YYYY-MM-DD&to=YYYY-MM-DD` selalu tersedia tanpa SMTP. PDF dibuat native (font Type1 standar, tanpa dependency tambahan). Scheduler hanya mengirim sekali per org per hari, dijamin oleh constraint UNIQUE pada tabel `report_runs`, dan hanya untuk org dengan `settings.scheduledReports=true`. Setiap unduhan maupun pengiriman email tercatat di `audit_logs`. Endpoint `/api/ingest/*` memakai **limiter terpisah** yang lebih longgar, karena log shipper mengirim traffic jauh lebih padat daripada API interaktif.
 > Rate limit berlaku **per IP**, sedangkan account lockout berlaku **per akun** — keduanya saling melengkapi. Counter lockout tersimpan di tabel `users` (`failed_login_attempts`, `locked_until`) dan otomatis di-reset saat login berhasil.
 
 ## Production Build

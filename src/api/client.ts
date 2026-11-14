@@ -95,6 +95,29 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// --- Authenticated binary download ---
+// A plain <a href> cannot send the Bearer token, so reports are fetched and
+// saved through a temporary object URL instead.
+async function fetchBlob(url: string): Promise<{ blob: Blob; filename: string }> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  const res = await fetch(url, { headers })
+  if (res.status === 401) {
+    clearToken()
+    window.location.hash = '#/login'
+    throw new ApiError(401, 'Sesi berakhir. Silakan login kembali.', 'SESSION_EXPIRED')
+  }
+  if (!res.ok) {
+    throw await toApiError(res)
+  }
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = /filename="?([^";]+)"?/i.exec(disposition)
+  return { blob: await res.blob(), filename: match?.[1] || 'cyberwatch-report.csv' }
+}
+
 // --- Auth API ---
 export const authApi = {
   register(orgName: string, name: string, email: string, password: string) {
@@ -176,6 +199,37 @@ export const adminApi = {
   },
   exportData(type: string) {
     return fetchJSON<any>(`${API_BASE}/admin/export/${type}`)
+  }
+}
+
+// --- Reports API (Task #31) ---
+export const reportApi = {
+  list() {
+    return fetchJSON<any>(`${API_BASE}/reports`)
+  },
+  async download(kind: string, format: 'csv' | 'pdf' | 'json' = 'csv', from = '', to = '') {
+    const qs = new URLSearchParams({ format })
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    const { blob, filename } = await fetchBlob(`${API_BASE}/reports/${encodeURIComponent(kind)}?${qs}`)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 2000)
+  },
+  send(kind: string, from = '', to = '', recipients = '') {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    return fetchJSON<any>(`${API_BASE}/reports/${encodeURIComponent(kind)}/send?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipients })
+    })
   }
 }
 

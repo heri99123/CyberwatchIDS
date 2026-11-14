@@ -20,6 +20,7 @@ mod error;
 mod security;
 mod mailer;
 mod event_pipeline;
+mod reports;
 
 use state::AppState;
 
@@ -71,6 +72,9 @@ async fn main() -> anyhow::Result<()> {
         routes::ingest::spawn_udp_syslog_listener(state.clone(), port, org_id);
     }
 
+    // Optional daily compliance report email (Task #31). Disabled by default.
+    reports::spawn_scheduler(state.clone());
+
     // Build router
     let app = build_router(state.clone());
 
@@ -90,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("[Auth] JWT authentication enabled");
     tracing::info!("[Mail] Email notifications: {}", if state.mailer.is_enabled() { "enabled" } else { "disabled" });
     tracing::info!("[Ingest] Webhook + syslog endpoints ready (API key or JWT)");
+    tracing::info!("[Reports] CSV / PDF / JSON export at /api/reports/:kind");
     tracing::info!("[Multi-tenant] Organization data isolation active");
     tracing::info!("");
 
@@ -152,6 +157,10 @@ fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/admin/api-keys/:id", axum::routing::delete(routes::admin::revoke_api_key))
         .route("/api/admin/audit-logs", axum::routing::get(routes::admin::audit_logs))
         .route("/api/admin/export/:type", axum::routing::get(routes::admin::export_data))
+        // Reports (Task #31): CSV / PDF / JSON export + scheduled delivery
+        .route("/api/reports", axum::routing::get(routes::reports::index))
+        .route("/api/reports/:kind", axum::routing::get(routes::reports::download))
+        .route("/api/reports/:kind/send", axum::routing::post(routes::reports::email))
         // Incidents
         .route("/api/incidents", axum::routing::get(routes::incidents::list))
         .route("/api/incidents", axum::routing::post(routes::incidents::create))

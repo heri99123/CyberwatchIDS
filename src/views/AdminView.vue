@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { adminApi, incidentApi, clearToken } from '@/api/client'
+import { adminApi, incidentApi, clearToken, reportApi } from '@/api/client'
 
 const emit = defineEmits<{ (e: 'logout'): void }>()
 
@@ -37,6 +37,23 @@ const emailAlerts = ref(false)
 const emailAlertsSaving = ref(false)
 const emailAlertsMsg = ref('')
 
+// Compliance reports (Task #31)
+const reportKind = ref('compliance')
+const reportFormat = ref<'csv' | 'pdf' | 'json'>('pdf')
+const reportFrom = ref('')
+const reportTo = ref('')
+const reportBusy = ref(false)
+const reportMsg = ref('')
+const reportInfo = ref<any>(null)
+const scheduledReports = ref(false)
+const scheduledSaving = ref(false)
+const reportKinds = [
+  { id: 'compliance', label: 'Compliance Controls' },
+  { id: 'security-summary', label: 'Security Summary' },
+  { id: 'incident-report', label: 'Incident Report' },
+  { id: 'audit-trail', label: 'Audit Trail' }
+]
+
 function orgSettings(): Record<string, any> {
   const raw = orgInfo.value?.settings
   if (!raw) return {}
@@ -71,12 +88,15 @@ async function loadAll() {
     users.value = u
     orgInfo.value = o
     emailAlerts.value = !!orgSettings().emailAlerts
+    scheduledReports.value = !!orgSettings().scheduledReports
     apiKeys.value = k
     incidents.value = i
     auditLogs.value = l
   } catch (e) {
     console.error('Failed to load admin data:', e)
   }
+  // Non-critical: an older backend may not expose /api/reports yet.
+  reportApi.list().then(r => { reportInfo.value = r }).catch(() => {})
 }
 
 async function handleCreateUser() {
@@ -107,6 +127,50 @@ async function handleEmailAlertsChange() {
     emailAlertsMsg.value = e.message || 'Gagal menyimpan pengaturan'
   } finally {
     emailAlertsSaving.value = false
+  }
+}
+
+async function handleReportDownload() {
+  reportBusy.value = true
+  reportMsg.value = ''
+  try {
+    await reportApi.download(reportKind.value, reportFormat.value, reportFrom.value, reportTo.value)
+    reportMsg.value = `Laporan ${reportFormat.value.toUpperCase()} berhasil diunduh`
+  } catch (e: any) {
+    reportMsg.value = e.message || 'Gagal mengunduh laporan'
+  } finally {
+    reportBusy.value = false
+  }
+}
+
+async function handleReportEmail() {
+  reportBusy.value = true
+  reportMsg.value = ''
+  try {
+    const res = await reportApi.send(reportKind.value, reportFrom.value, reportTo.value)
+    reportMsg.value = res.queued
+      ? `Laporan dikirim ke ${res.recipients} penerima (${res.rows} baris)`
+      : (res.reason || 'SMTP belum aktif')
+  } catch (e: any) {
+    reportMsg.value = e.message || 'Gagal mengirim laporan'
+  } finally {
+    reportBusy.value = false
+  }
+}
+
+async function handleScheduledReportsChange() {
+  scheduledSaving.value = true
+  reportMsg.value = ''
+  try {
+    await adminApi.updateOrg({ settings: { ...orgSettings(), scheduledReports: scheduledReports.value } })
+    orgInfo.value = await adminApi.getOrg()
+    scheduledReports.value = !!orgSettings().scheduledReports
+    reportMsg.value = scheduledReports.value ? 'Laporan terjadwal diaktifkan' : 'Laporan terjadwal dimatikan'
+  } catch (e: any) {
+    scheduledReports.value = !scheduledReports.value
+    reportMsg.value = e.message || 'Gagal menyimpan pengaturan'
+  } finally {
+    scheduledSaving.value = false
   }
 }
 
@@ -562,8 +626,53 @@ const statusColors: Record<string, string> = {
 
     <!-- Export Tab -->
     <div v-if="activeAdminTab === 'export'" class="space-y-3">
+      <!-- Compliance reports (Task #31) -->
       <div class="bg-cyber-card border border-cyber-border rounded-lg p-6">
-        <h3 class="text-sm font-semibold text-cyber-text mb-4">Export Data Organisasi</h3>
+        <h3 class="text-sm font-semibold text-cyber-text mb-2">Laporan &amp; Compliance</h3>
+        <p class="text-xs text-cyber-textmuted mb-4">
+          Generate laporan untuk audit: Security Summary, Incident Report, Audit Trail, dan
+          Compliance Controls. PDF/JSON menyertakan metadata periode; CSV berupa tabel datar
+          yang aman dibuka di spreadsheet (formula injection dinetralisir).
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <select v-model="reportKind" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none">
+            <option v-for="k in reportKinds" :key="k.id" :value="k.id">{{ k.label }}</option>
+          </select>
+          <select v-model="reportFormat" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none">
+            <option value="pdf">PDF</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+          </select>
+          <input v-model="reportFrom" type="date" title="Dari tanggal (YYYY-MM-DD)" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none" />
+          <input v-model="reportTo" type="date" title="Sampai tanggal (YYYY-MM-DD)" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none" />
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <button @click="handleReportDownload" :disabled="reportBusy" class="px-4 py-2 bg-cyber-accent text-white rounded-md text-sm font-medium hover:bg-cyber-accent/90 disabled:opacity-50">
+            {{ reportBusy ? 'Memproses...' : 'Download Laporan' }}
+          </button>
+          <button @click="handleReportEmail" :disabled="reportBusy" class="px-4 py-2 bg-cyber-bg border border-cyber-border text-cyber-text rounded-md text-sm font-medium hover:border-cyber-accent disabled:opacity-50">
+            Kirim via Email
+          </button>
+          <span v-if="reportMsg" class="text-xs text-cyber-textdim">{{ reportMsg }}</span>
+        </div>
+        <div class="mt-4 pt-4 border-t border-cyber-border">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input v-model="scheduledReports" type="checkbox" :disabled="scheduledSaving" @change="handleScheduledReportsChange" class="w-4 h-4 accent-cyber-accent" />
+            <span class="text-sm text-cyber-text">Kirim laporan harian otomatis ke admin organisasi</span>
+          </label>
+          <p class="text-xs text-cyber-textmuted mt-2">
+            <template v-if="reportInfo && reportInfo.schedule">
+              Server: {{ reportInfo.schedule.enabled ? `aktif, jam ${String(reportInfo.schedule.hourUtc).padStart(2, '0')}:00 UTC, jenis ${reportInfo.schedule.kind}` : 'nonaktif (REPORT_SCHEDULE_ENABLED=false)' }}.
+            </template>
+            <template v-if="reportInfo && !reportInfo.smtpEnabled">
+              <span class="text-yellow-400">SMTP belum aktif — email tidak akan terkirim.</span>
+            </template>
+          </p>
+        </div>
+      </div>
+
+      <div class="bg-cyber-card border border-cyber-border rounded-lg p-6">
+        <h3 class="text-sm font-semibold text-cyber-text mb-4">Export Data Mentah (JSON)</h3>
         <p class="text-xs text-cyber-textmuted mb-4">Download data dalam format JSON untuk backup atau integrasi dengan SIEM/SOAR eksternal.</p>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
           <button @click="handleExport('events')" class="p-4 bg-cyber-bg border border-cyber-border rounded-lg hover:border-cyber-accent transition-colors text-center">

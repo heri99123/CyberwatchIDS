@@ -217,6 +217,19 @@ fn create_schema(conn: &rusqlite::Connection) -> Result<(), DbError> {
             resolved_at TEXT,
             FOREIGN KEY (org_id) REFERENCES organizations(id)
         )"#,
+        // Scheduled report delivery ledger (Task #31). The UNIQUE constraint
+        // makes "once per org, per report kind, per day" atomic even when the
+        // scheduler restarts mid-hour.
+        r#"CREATE TABLE IF NOT EXISTS report_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            org_id TEXT NOT NULL,
+            report_kind TEXT NOT NULL,
+            period_key TEXT NOT NULL,
+            recipients TEXT,
+            rows_count INTEGER DEFAULT 0,
+            sent_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(org_id, report_kind, period_key)
+        )"#,
         // Notifications
         r#"CREATE TABLE IF NOT EXISTS notifications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -285,6 +298,7 @@ fn create_indexes(conn: &rusqlite::Connection) -> Result<(), DbError> {
         "CREATE INDEX IF NOT EXISTS idx_incidents_org ON incidents(org_id)",
         "CREATE INDEX IF NOT EXISTS idx_notif_org ON notifications(org_id)",
         "CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)",
+        "CREATE INDEX IF NOT EXISTS idx_report_runs_org ON report_runs(org_id)",
     ];
 
     for sql in &indexes {

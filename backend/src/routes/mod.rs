@@ -3,6 +3,7 @@ pub mod admin;
 pub mod ids;
 pub mod simulator;
 pub mod ingest;
+pub mod reports;
 pub mod incidents;
 pub mod notifications;
 pub mod ws;

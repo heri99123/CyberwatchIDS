@@ -6,7 +6,7 @@
 //! failure can never break an HTTP request.
 
 use crate::db::{get_conn, DbPool};
-use lettre::message::header::ContentType;
+use lettre::message::{header::ContentType, Attachment, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use std::sync::Arc;
@@ -141,6 +141,43 @@ impl Mailer {
         tracing::info!("[Mailer] sent to={} subject={}", to, subject);
         Ok(())
     }
+
+    /// Send a report with a CSV attachment (Task #31). No-op when SMTP is not
+    /// configured, exactly like `send()`.
+    pub async fn send_report(
+        &self,
+        to: &str,
+        subject: &str,
+        html: &str,
+        attachment_name: String,
+        attachment_bytes: Vec<u8>,
+    ) -> anyhow::Result<()> {
+        let transport = match &self.transport {
+            Some(t) => t.clone(),
+            None => {
+                tracing::debug!("[Mailer] skip report (disabled) to={} subject={}", to, subject);
+                return Ok(());
+            }
+        };
+
+        let csv_type = ContentType::parse("text/csv").unwrap_or(ContentType::TEXT_PLAIN);
+        let message = Message::builder()
+            .from(self.from.parse()?)
+            .to(to.parse()?)
+            .subject(subject)
+            .multipart(
+                MultiPart::mixed()
+                    .singlepart(SinglePart::html(html.to_string()))
+                    .singlepart(
+                        Attachment::new(attachment_name).body(attachment_bytes, csv_type),
+                    ),
+            )
+            .map_err(|e| anyhow::anyhow!("failed to build report email: {}", e))?;
+
+        transport.send(message).await?;
+        tracing::info!("[Mailer] report sent to={} subject={}", to, subject);
+        Ok(())
+    }
 }
 
 /// Fire-and-forget send. Callers never await SMTP.
@@ -152,6 +189,37 @@ pub fn spawn_send(mailer: Arc<Mailer>, recipients: Vec<String>, subject: String,
         for to in recipients {
             if let Err(e) = mailer.send(&to, &subject, &html).await {
                 tracing::warn!("[Mailer] failed to send to {}: {}", to, e);
+            }
+        }
+    });
+}
+
+/// Fire-and-forget report delivery with a CSV attachment. SMTP latency or
+/// failure never blocks the HTTP request or the scheduler loop.
+pub fn spawn_report_send(
+    mailer: Arc<Mailer>,
+    recipients: Vec<String>,
+    subject: String,
+    html: String,
+    attachment_name: String,
+    attachment_bytes: Vec<u8>,
+) {
+    if !mailer.is_enabled() || recipients.is_empty() {
+        return;
+    }
+    tokio::spawn(async move {
+        for to in recipients {
+            let result = mailer
+                .send_report(
+                    &to,
+                    &subject,
+                    &html,
+                    attachment_name.clone(),
+                    attachment_bytes.clone(),
+                )
+                .await;
+            if let Err(e) = result {
+                tracing::warn!("[Mailer] failed to send report to {}: {}", to, e);
             }
         }
     });
@@ -216,7 +284,8 @@ pub fn meets_threshold(severity: &str, min_severity: &str) -> bool {
     severity_rank(severity) >= severity_rank(min_severity)
 }
 
-fn split_list(raw: &str) -> Vec<String> {
+/// Split a comma-separated env value into trimmed, non-empty entries.
+pub fn split_list(raw: &str) -> Vec<String> {
     raw.split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())

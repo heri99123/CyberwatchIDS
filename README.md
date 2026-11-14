@@ -191,6 +191,37 @@ CyberWatchIDS/
 +-- .devcontainer/          # GitHub Codespaces config
 ```
 
+## Report Export & Compliance (Task #31)
+
+Empat jenis laporan, selalu **terbatas pada organisasi** peminta:
+
+| Kind | Isi |
+|------|-----|
+| `security-summary` | Metrik deteksi: total event, severity, attack type & IP teratas, rule aktif, insiden terbuka |
+| `incident-report` | Daftar insiden beserta status, severity, assignee, waktu resolve |
+| `audit-trail` | Seluruh entri audit log (user, action, resource, IP) |
+| `compliance` | Checklist kontrol CTL-01..CTL-13 dengan status `PASS`/`REVIEW` + bukti dari database |
+
+```bash
+# Download (butuh Bearer token)
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8421/api/reports/compliance?format=pdf&from=2026-11-01&to=2026-11-14" \
+  -o compliance.pdf
+
+# Format lain: csv | pdf | json. Rentang tanggal opsional (YYYY-MM-DD), limit 1..5000.
+# Kirim on-demand via email (admin saja, CSV terlampir)
+curl -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"recipients":"audit@example.com"}' \
+  "http://localhost:8421/api/reports/compliance/send"
+```
+
+- **CSV** = satu tabel datar. Sel yang diawali `= + - @` diberi prefix `'` untuk mencegah *formula injection* saat dibuka di Excel/LibreOffice.
+- **PDF** dibuat native tanpa crate tambahan (font Type1 standar Helvetica/Helvetica-Bold/Courier), sehingga tidak butuh pustaka sistem/fontconfig di image Docker.
+- **Scheduled report**: `REPORT_SCHEDULE_ENABLED=true` + toggle `scheduledReports` di Admin → Export. Dikirim sekali per org per hari (deduplikasi via tabel `report_runs`), berisi ringkasan HTML + lampiran CSV. Tanpa SMTP, endpoint download tetap berfungsi dan email otomatis tidak dikirim.
+- Semua unduhan dan pengiriman tercatat sebagai `export_report` / `email_report` di `audit_logs`.
+
+Endpoint lama `GET /api/admin/export/:type` (JSON mentah) tetap dipertahankan untuk kompatibilitas.
+
 ## License
 
 Copyright (C) 2026 Heri Muhrial
