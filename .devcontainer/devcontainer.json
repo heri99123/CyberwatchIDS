@@ -1,0 +1,40 @@
+{
+  "name": "CyberWatch IDS Dev",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "Vue.volar",
+        "bradlc.vscode-tailwindcss",
+        "serayuzgur.crates",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "rust-analyzer.cargo.features": "all"
+      }
+    }
+  },
+  "forwardPorts": [8421, 5173],
+  "portsAttributes": {
+    "8421": {
+      "label": "Rust backend API + WebSocket",
+      "visibility": "public"
+    },
+    "5173": {
+      "label": "Vue frontend dev server",
+      "visibility": "public",
+      "onAutoForward": "openPreview"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "remoteUser": "vscode"
+}

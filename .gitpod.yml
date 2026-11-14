@@ -1,3 +1,10 @@
+# Gitpod is now OpenAI Ona and new signups are closed.
+# Use GitHub Codespaces instead: see .devcontainer/devcontainer.json and DEVENV.md
+#
+# Open in GitHub Codespaces:
+# https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=heri99123/CyberwatchIDS
+#
+# This file is kept for backwards compatibility with existing Gitpod accounts.
 image: gitpod/workspace-full
 
 tasks:
