@@ -1,8 +1,28 @@
 {
   "name": "cyber-watch-ids",
-  "version": "2.0.0",
-  "description": "Security Monitoring & Intrusion Detection System with CVE Database Reference",
-  "main": "server/index.js",
+  "version": "3.0.0",
+  "description": "CyberWatch IDS - Security Monitoring & Intrusion Detection System with CVE Database Reference",
+  "main": "server-rust/src/main.rs",
+  "license": "AGPL-3.0",
+  "author": {
+    "name": "Heri Muhrial",
+    "email": "",
+    "url": "https://github.com/heri99123"
+  },
+  "contributors": [
+    {
+      "name": "Heri Muhrial",
+      "url": "https://github.com/heri99123"
+    }
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/heri99123/CyberwatchIDS"
+  },
+  "homepage": "https://github.com/heri99123/CyberwatchIDS",
+  "bugs": {
+    "url": "https://github.com/heri99123/CyberwatchIDS/issues"
+  },
   "scripts": {
     "dev": "vite",
     "dev:server": "node server/index.js",
