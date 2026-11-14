@@ -1,9 +1,13 @@
 use axum::Router;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
 use tower_http::compression::CompressionLayer;
 use tower_http::trace::TraceLayer;
+use tower_governor::{
+    governor::GovernorConfigBuilder,
+    key_extractor::SmartIpKeyExtractor,
+    GovernorLayer,
+};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
 mod db;
@@ -13,6 +17,7 @@ mod simulator;
 mod routes;
 mod state;
 mod error;
+mod security;
 
 use state::AppState;
 
@@ -75,16 +80,44 @@ async fn main() -> anyhow::Result<()> {
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("Server listening on {}", addr);
-    axum::serve(listener, app).await?;
+    // `into_make_service_with_connect_info` exposes the client SocketAddr to
+    // tower-governor's per-IP rate limiter (works behind a reverse proxy too).
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
 
 fn build_router(state: Arc<AppState>) -> Router {
-    let cors = CorsLayer::permissive();
+    let cors = security::cors_layer();
     let compression = CompressionLayer::new();
 
-    Router::new()
+    // --- Rate limiter (per-IP) ---
+    // Defaults: 1 token replenished every 2s, burst of 30. Tunable via env.
+    // NOTE: tower-governor 0.5 `per_second` takes u64, `burst_size` takes u32,
+    // and `finish()` returns Option (None when a value is zero).
+    let per_second: u64 = std::env::var("RATE_LIMIT_PER_SECOND")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(2);
+    let burst: u32 = std::env::var("RATE_LIMIT_BURST")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(30);
+
+    // SECURITY: only trust X-Forwarded-For / X-Real-IP when explicitly enabled.
+    // Those headers are client-controlled and can be spoofed to bypass rate
+    // limits. Enable ONLY behind a trusted reverse proxy that overwrites them.
+    let trust_proxy = std::env::var("RATE_LIMIT_TRUST_PROXY").unwrap_or_default() == "true";
+
+    // API routes are rate-limited per IP. Health, WebSocket and static assets
+    // are deliberately kept outside the limiter.
+    let api_routes = Router::new()
         // Auth routes (public)
         .route("/api/auth/register", axum::routing::post(routes::auth::register))
         .route("/api/auth/login", axum::routing::post(routes::auth::login))
@@ -129,16 +162,44 @@ fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/simulate/start", axum::routing::post(routes::simulator::start))
         .route("/api/simulate/stop", axum::routing::post(routes::simulator::stop))
         .route("/api/simulate/status", axum::routing::get(routes::simulator::status))
-        .route("/api/simulate/attack", axum::routing::post(routes::simulator::attack))
-        // Health check
+        .route("/api/simulate/attack", axum::routing::post(routes::simulator::attack));
+
+    // Scoped per-IP rate limiting.
+    // Two builder branches are needed because the key extractor is a generic
+    // type parameter, so the two configs have different concrete types.
+    let api_routes = if trust_proxy {
+        let mut builder = GovernorConfigBuilder::default();
+        let mut builder = builder.key_extractor(SmartIpKeyExtractor);
+        builder.per_second(per_second).burst_size(burst);
+        let conf = Arc::new(
+            builder
+                .finish()
+                .expect("invalid governor rate-limit configuration"),
+        );
+        api_routes.layer(GovernorLayer { config: conf })
+    } else {
+        let conf = Arc::new(
+            GovernorConfigBuilder::default()
+                .per_second(per_second)
+                .burst_size(burst)
+                .finish()
+                .expect("invalid governor rate-limit configuration"),
+        );
+        api_routes.layer(GovernorLayer { config: conf })
+    };
+
+    Router::new()
+        .merge(api_routes)
+        // Health check (not rate-limited — used by monitoring/load balancers)
         .route("/api/health", axum::routing::get(routes::health::health))
-        // WebSocket
+        // WebSocket (long-lived; rate limiting at handshake is not desired)
         .route("/ws", axum::routing::get(routes::ws::ws_handler))
         // Static files (Vue frontend dist/)
         .fallback_service(tower_http::services::ServeDir::new("../dist")
             .fallback(tower_http::services::ServeFile::new("../dist/index.html")))
         .layer(cors)
-        .layer(compression)
         .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(security::security_headers))
+        .layer(compression)
         .with_state(state)
 }

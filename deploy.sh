@@ -55,6 +55,36 @@ fi
 echo "[6/7] Setting ownership"
 chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 
+# Write env file (mode 600 — JWT_SECRET must not be world-readable / in unit file)
+ENV_FILE="/etc/${APP_NAME}.env"
+GENERATED_SECRET=""
+if [ -z "${JWT_SECRET:-}" ]; then
+  if [ -f "$ENV_FILE" ] && grep -q '^JWT_SECRET=' "$ENV_FILE"; then
+    # Reuse existing secret on redeploy so existing sessions stay valid
+    JWT_SECRET="$(grep '^JWT_SECRET=' "$ENV_FILE" | cut -d= -f2-)"
+  else
+    JWT_SECRET="$(openssl rand -hex 32 2>/dev/null || echo change-me-in-production)"
+    GENERATED_SECRET="yes"
+  fi
+fi
+cat > "$ENV_FILE" << EOF
+PORT=$PORT
+DATABASE_PATH=$APP_DIR/data/cve-database.db
+RUST_LOG=info,cyberwatch=debug
+JWT_SECRET=$JWT_SECRET
+CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+HSTS_ENABLED=${HSTS_ENABLED:-true}
+RATE_LIMIT_PER_SECOND=${RATE_LIMIT_PER_SECOND:-2}
+RATE_LIMIT_BURST=${RATE_LIMIT_BURST:-30}
+RATE_LIMIT_TRUST_PROXY=${RATE_LIMIT_TRUST_PROXY:-true}
+EOF
+chmod 600 "$ENV_FILE"
+chown "$APP_USER:$APP_USER" "$ENV_FILE"
+
+if [ -n "$GENERATED_SECRET" ]; then
+  echo "NOTE: Generated a random JWT_SECRET in $ENV_FILE (persisted across redeploys)."
+fi
+
 # Create systemd service
 echo "[7/7] Installing systemd service"
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
@@ -70,10 +100,7 @@ WorkingDirectory=$APP_DIR
 ExecStart=$APP_DIR/cyberwatch-ids
 Restart=always
 RestartSec=5
-Environment=PORT=$PORT
-Environment=DATABASE_PATH=$APP_DIR/data/cve-database.db
-Environment=RUST_LOG=info,cyberwatch=debug
-Environment=NODE_ENV=production
+EnvironmentFile=$ENV_FILE
 
 # Security hardening
 NoNewPrivileges=true

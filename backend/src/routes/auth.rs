@@ -3,23 +3,30 @@ use axum::http::HeaderMap;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use validator::Validate;
 
 use crate::auth;
 use crate::db::get_conn;
 use crate::error::{AppError, AppResult};
 use crate::state::SharedState;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct RegisterRequest {
+    #[validate(length(min = 2, max = 100, message = "Organization name must be 2-100 characters"))]
     pub org_name: String,
+    #[validate(length(min = 2, max = 100, message = "Name must be 2-100 characters"))]
     pub name: String,
+    #[validate(email(message = "Invalid email format"))]
     pub email: String,
+    #[validate(length(min = 8, max = 128, message = "Password must be at least 8 characters"))]
     pub password: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct LoginRequest {
+    #[validate(email(message = "Invalid email format"))]
     pub email: String,
+    #[validate(length(min = 1, max = 128, message = "Password is required"))]
     pub password: String,
 }
 
@@ -53,12 +60,8 @@ pub async fn register(
     State(state): State<SharedState>,
     Json(body): Json<RegisterRequest>,
 ) -> AppResult<Json<Value>> {
-    if body.org_name.is_empty() || body.name.is_empty() || body.email.is_empty() || body.password.is_empty() {
-        return Err(AppError::BadRequest("All fields required: orgName, name, email, password".to_string()));
-    }
-    if body.password.len() < 6 {
-        return Err(AppError::BadRequest("Password must be at least 6 characters".to_string()));
-    }
+    body.validate()
+        .map_err(|e| AppError::BadRequest(format!("Validation failed: {}", e)))?;
 
     let conn = get_conn(&state.db)?;
 
@@ -120,9 +123,8 @@ pub async fn login(
     State(state): State<SharedState>,
     Json(body): Json<LoginRequest>,
 ) -> AppResult<Json<Value>> {
-    if body.email.is_empty() || body.password.is_empty() {
-        return Err(AppError::BadRequest("Email and password required".to_string()));
-    }
+    body.validate()
+        .map_err(|e| AppError::BadRequest(format!("Validation failed: {}", e)))?;
 
     let conn = get_conn(&state.db)?;
 

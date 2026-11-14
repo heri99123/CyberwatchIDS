@@ -6,6 +6,8 @@ WORKDIR /build
 
 # Copy Cargo files first for dependency caching
 COPY backend/Cargo.toml backend/Cargo.lock* ./
+# Cargo.toml declares readme = "../README.md"; make it resolvable in the image
+COPY README.md /README.md
 
 # Create a dummy src/main.rs to build dependencies first
 RUN mkdir -p src/routes && \
@@ -13,9 +15,8 @@ RUN mkdir -p src/routes && \
     echo "" > src/routes/mod.rs && \
     cargo build --release || true
 
-# Copy actual source code
+# Copy actual source code (env is injected at runtime, never baked into the image)
 COPY backend/src/ src/
-COPY backend/.env .env
 
 # Build the actual binary
 RUN cargo build --release
@@ -33,11 +34,11 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /build/target/release/cyberwatch-ids /app/cyberwatch-ids
 
-# Copy Vue frontend dist
+# Copy Vue frontend dist (built by the frontend CI job)
 COPY dist/ /app/dist/
 
-# Copy database seed
-COPY data/ /app/data/
+# Ensure writable data directory (init_database() creates parent dirs + schema)
+RUN mkdir -p /app/data
 
 ENV PORT=8421
 ENV DATABASE_PATH=/app/data/cve-database.db

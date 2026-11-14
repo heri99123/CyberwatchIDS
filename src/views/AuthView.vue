@@ -47,8 +47,16 @@ async function handleRegister() {
     error.value = 'Semua field wajib diisi'
     return
   }
-  if (regPassword.value.length < 6) {
-    error.value = 'Password minimal 6 karakter'
+  if (regPassword.value.length < 8) {
+    error.value = 'Password minimal 8 karakter'
+    return
+  }
+  if (regPassword.value.length > 128) {
+    error.value = 'Password maksimal 128 karakter'
+    return
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(regEmail.value)) {
+    error.value = 'Format email tidak valid'
     return
   }
   if (regPassword.value !== regConfirm.value) {
@@ -191,7 +199,9 @@ function toggleMode() {
               <input
                 v-model="regPassword"
                 type="password"
-                placeholder="Min. 6 karakter"
+                placeholder="Min. 8 karakter"
+                minlength="8"
+                maxlength="128"
                 class="w-full px-3 py-2.5 bg-cyber-bg border border-cyber-border rounded-lg text-sm text-cyber-text placeholder-cyber-textmuted/50 focus:border-cyber-accent focus:outline-none transition-colors"
                 required
               />

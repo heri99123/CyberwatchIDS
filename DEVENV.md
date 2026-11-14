@@ -40,9 +40,24 @@ npm install
 npm run dev
 
 # Backend (another terminal)
+cp backend/.env.example backend/.env   # lalu edit JWT_SECRET
 cd backend
 cargo run --release
 ```
+
+### Environment (backend/.env)
+
+Lihat tabel lengkap di [README.md](README.md#konfigurasi-environment). Ringkasan:
+
+| Variable | Default | Catatan |
+|----------|---------|---------|
+| `JWT_SECRET` | dev default | **Wajib diganti** di production |
+| `CORS_ALLOWED_ORIGINS` | kosong | Kosong = same-origin only; `*` = semua origin (hindari) |
+| `HSTS_ENABLED` | `false` | `true` hanya di belakang TLS proxy |
+| `RATE_LIMIT_PER_SECOND` / `RATE_LIMIT_BURST` | `2` / `30` | Rate limit per IP pada `/api/*` |
+| `RATE_LIMIT_TRUST_PROXY` | `false` | `true` hanya jika proxy menimpa `X-Forwarded-For` |
+
+> Rate limiting tidak diterapkan pada `/api/health`, `/ws`, dan static assets.
 
 ## Production Build
 

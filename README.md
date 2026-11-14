@@ -32,6 +32,26 @@ CyberWatch IDS adalah sistem deteksi intrusi (IDS) berbasis web untuk monitoring
 - Incident management workflow
 - Attack simulator untuk testing
 - Admin panel dengan audit logs
+- **Rate limiting per IP** (tower-governor) untuk semua endpoint `/api/*`
+- **OWASP security headers** (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS opsional)
+- **CORS restrictif** (same-origin by default) + **input validation** (validator)
+
+## Konfigurasi Environment
+
+Salin `backend/.env.example` ke `backend/.env`, lalu sesuaikan:
+
+| Variable | Default | Keterangan |
+|----------|---------|------------|
+| `PORT` | `8421` | Port HTTP backend |
+| `DATABASE_PATH` | `../data/cve-database.db` | Path SQLite |
+| `JWT_SECRET` | *(dev default)* | **Wajib diganti di production** |
+| `CORS_ALLOWED_ORIGINS` | *(kosong)* | Daftar origin dipisah koma. Kosong = same-origin only |
+| `HSTS_ENABLED` | `false` | Aktifkan hanya di belakang TLS-terminating proxy |
+| `RATE_LIMIT_PER_SECOND` | `2` | Interval replenish 1 token (detik) |
+| `RATE_LIMIT_BURST` | `30` | Maksimum burst per IP |
+| `RATE_LIMIT_TRUST_PROXY` | `false` | `true` hanya jika reverse proxy **menimpa** `X-Forwarded-For` |
+
+> **Catatan keamanan:** `RATE_LIMIT_TRUST_PROXY=true` hanya aman bila ada reverse proxy tepercaya yang *mengganti* (bukan sekadar menambahkan) header `X-Forwarded-For` / `X-Real-IP`. Jika tidak, client bisa memalsukan IP untuk melewati rate limit.
 
 ## Quick Start
 
@@ -71,6 +91,7 @@ CyberWatchIDS/
 |   |   +-- main.rs         # Axum router, 35+ routes
 |   |   +-- db.rs           # 12 tables, migrations, r2d2 pool
 |   |   +-- auth.rs         # JWT, argon2, API keys
+|   |   +-- security.rs     # OWASP headers, CORS policy, input validation
 |   |   +-- ids_engine.rs   # Regex IDS, event logging, IP reputation
 |   |   +-- simulator.rs    # 30+ attack templates
 |   |   +-- routes/         # auth, admin, ids, simulator, incidents, ws, health

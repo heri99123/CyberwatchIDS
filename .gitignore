@@ -5,13 +5,13 @@ node_modules/
 
 # Build output
 dist/
-server-rust/target/
+backend/target/
 
 # Environment
 .env
 .env.local
 .env.*.local
-server-rust/.env
+backend/.env
 
 # Database
 data/*.db
@@ -46,6 +46,5 @@ docker-data/
 *.png
 !public/**/*.png
 
-# Cargo lock is kept for binary projects
-# (uncomment if you want to ignore it)
-# server-rust/Cargo.lock
+# Cargo lock is kept for binary projects (reproducible builds)
+# backend/Cargo.lock

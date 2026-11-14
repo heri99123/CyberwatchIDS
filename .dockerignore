@@ -1,11 +1,15 @@
 # CyberWatch IDS - .dockerignore
 node_modules/
-src/
+# NOTE: do NOT ignore `src/` here — Docker patterns can also match
+# `backend/src/`, which is required by `COPY backend/src/ src/`.
 *.md
+!README.md
 .git
 .wbapp_*
-target/
+/target/
 backend/target/
 .github/
 .devcontainer/
 .workbuddy-ai/
+.env
+.env.local

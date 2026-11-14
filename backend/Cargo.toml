@@ -47,18 +47,24 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Rate limiting (Task #25)
-tower-governor = "0.5"
+tower-governor = { version = "0.5", features = ["axum", "tracing"] }
 
-# Email notifications (Task #27)
-lettre = { version = "0.11", default-features = false, features = ["smtp", "rustls-tls", "builder"] }
-
-# TLS for production HTTPS (Task #42)
-axum-server = { version = "0.7", features = ["tls-rustls"] }
-rustls = "0.23"
-rustls-pemfile = "2.2"
+# Email notifications (Task #27) — async SMTP over rustls 0.21/`ring`.
+# default-features = false avoids native-tls/OpenSSL. `tokio1-rustls-tls`
+# already pulls in `rustls-tls` + `tokio1`, so no aws-lc-rs/cmake is needed.
+lettre = { version = "0.11", default-features = false, features = [
+    "builder",
+    "smtp-transport",
+    "pool",
+    "tokio1-rustls-tls",
+    "tracing",
+] }
 
 # Report export (Task #31)
 csv = "1.3"
+
+# NOTE: native HTTPS termination (axum-server + rustls-pemfile) is deferred to
+# Task #42. TLS is currently terminated by the reverse proxy in front of the app.
 
 # Utilities
 uuid = { version = "1.11", features = ["v4"] }
