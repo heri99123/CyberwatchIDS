@@ -190,10 +190,15 @@ pub fn org_alert_recipients(pool: &DbPool, org_id: &str) -> Vec<String> {
         Err(_) => return Vec::new(),
     };
 
-    match stmt.query_map([org_id], |row| row.get::<_, String>(0)) {
-        Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
-        Err(_) => Vec::new(),
-    }
+    // Bind to a local first: the `Result<MappedRows>` temporary borrows `stmt`
+    // and must be dropped BEFORE `stmt`/`conn`, otherwise the tail expression
+    // keeps the borrow alive until the end of the block (E0597).
+    let recipients: Vec<String> =
+        match stmt.query_map([org_id], |row| row.get::<_, String>(0)) {
+            Ok(rows) => rows.filter_map(|r| r.ok()).collect(),
+            Err(_) => Vec::new(),
+        };
+    recipients
 }
 
 fn severity_rank(s: &str) -> i32 {
