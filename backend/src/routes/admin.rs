@@ -213,13 +213,17 @@ pub async fn get_org(
         "SELECT id, name, slug, plan, max_users, settings, created_at FROM organizations WHERE id = ?",
         [&user.org_id],
         |row| {
+            let settings_raw: String = row.get(5)?;
+            // Return a JSON object (not a JSON-encoded string) so the admin UI
+            // can toggle `emailAlerts` without double parsing.
+            let settings: Value = serde_json::from_str(&settings_raw).unwrap_or_else(|_| json!({}));
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
                 "name": row.get::<_, String>(1)?,
                 "slug": row.get::<_, String>(2)?,
                 "plan": row.get::<_, String>(3)?,
                 "max_users": row.get::<_, i64>(4)?,
-                "settings": row.get::<_, String>(5)?,
+                "settings": settings,
                 "created_at": row.get::<_, String>(6)?,
             }))
         },

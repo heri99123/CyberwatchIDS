@@ -1,5 +1,6 @@
 use crate::db::DbPool;
 use crate::ids_engine::IdsEngine;
+use crate::mailer::Mailer;
 use crate::simulator::AttackSimulator;
 use std::sync::Arc;
 
@@ -15,6 +16,7 @@ pub struct AppState {
     pub ids: IdsEngine,
     pub simulator: AttackSimulator,
     pub ws_clients: tokio::sync::Mutex<Vec<WsClient>>,
+    pub mailer: Arc<Mailer>,
 }
 
 impl AppState {

@@ -28,6 +28,20 @@ const createKeyLoading = ref(false)
 const newIncident = ref({ title: '', description: '', severity: 'medium' })
 const createIncidentLoading = ref(false)
 
+// Email alert preference (organization settings)
+const emailAlerts = ref(false)
+const emailAlertsSaving = ref(false)
+const emailAlertsMsg = ref('')
+
+function orgSettings(): Record<string, any> {
+  const raw = orgInfo.value?.settings
+  if (!raw) return {}
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw) || {} } catch { return {} }
+  }
+  return raw
+}
+
 const tabs = [
   { id: 'users' as AdminTab, label: 'Users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
   { id: 'org' as AdminTab, label: 'Organization', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5' },
@@ -52,6 +66,7 @@ async function loadAll() {
     ])
     users.value = u
     orgInfo.value = o
+    emailAlerts.value = !!orgSettings().emailAlerts
     apiKeys.value = k
     incidents.value = i
     auditLogs.value = l
@@ -72,6 +87,22 @@ async function handleCreateUser() {
     createUserMsg.value = e.message || 'Gagal membuat user'
   } finally {
     createUserLoading.value = false
+  }
+}
+
+async function handleEmailAlertsChange() {
+  emailAlertsSaving.value = true
+  emailAlertsMsg.value = ''
+  try {
+    await adminApi.updateOrg({ settings: { ...orgSettings(), emailAlerts: emailAlerts.value } })
+    orgInfo.value = await adminApi.getOrg()
+    emailAlerts.value = !!orgSettings().emailAlerts
+    emailAlertsMsg.value = emailAlerts.value ? 'Email alert diaktifkan' : 'Email alert dimatikan'
+  } catch (e: any) {
+    emailAlerts.value = !emailAlerts.value
+    emailAlertsMsg.value = e.message || 'Gagal menyimpan pengaturan'
+  } finally {
+    emailAlertsSaving.value = false
   }
 }
 
@@ -318,6 +349,25 @@ const statusColors: Record<string, string> = {
             <p class="text-sm text-cyber-text">{{ orgInfo.userCount }} / {{ orgInfo.max_users }}</p>
           </div>
         </div>
+      </div>
+
+      <div class="bg-cyber-card border border-cyber-border rounded-lg p-6">
+        <h3 class="text-sm font-semibold text-cyber-text mb-2">Notifikasi Email</h3>
+        <p class="text-xs text-cyber-textmuted mb-4">
+          Kirim email ke admin organisasi saat terdeteksi serangan berseveritas tinggi.
+          Membutuhkan konfigurasi SMTP di server (SMTP_ENABLED=true).
+        </p>
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+            v-model="emailAlerts"
+            type="checkbox"
+            :disabled="emailAlertsSaving"
+            @change="handleEmailAlertsChange"
+            class="w-4 h-4 accent-cyber-accent"
+          />
+          <span class="text-sm text-cyber-text">Aktifkan email alert</span>
+        </label>
+        <p v-if="emailAlertsMsg" class="text-xs mt-2 text-cyber-textdim">{{ emailAlertsMsg }}</p>
       </div>
     </div>
 

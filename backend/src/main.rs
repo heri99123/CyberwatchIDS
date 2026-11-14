@@ -18,6 +18,7 @@ mod routes;
 mod state;
 mod error;
 mod security;
+mod mailer;
 
 use state::AppState;
 
@@ -51,12 +52,16 @@ async fn main() -> anyhow::Result<()> {
     // Initialize simulator
     let simulator = simulator::AttackSimulator::new();
 
+    // Optional outbound email (no-op unless SMTP_ENABLED=true)
+    let mailer = Arc::new(mailer::Mailer::from_env());
+
     // Create shared application state
     let state = Arc::new(AppState {
         db: pool,
         ids,
         simulator,
         ws_clients: tokio::sync::Mutex::new(Vec::new()),
+        mailer,
     });
 
     // Build router
@@ -75,6 +80,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("");
     tracing::info!("[IDS] Engine initialized with {} rules", state.ids.rule_count());
     tracing::info!("[Auth] JWT authentication enabled");
+    tracing::info!("[Mail] Email notifications: {}", if state.mailer.is_enabled() { "enabled" } else { "disabled" });
     tracing::info!("[Multi-tenant] Organization data isolation active");
     tracing::info!("");
 

@@ -36,6 +36,7 @@ CyberWatch IDS adalah sistem deteksi intrusi (IDS) berbasis web untuk monitoring
 - **OWASP security headers** (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS opsional)
 - **CORS restrictif** (same-origin by default) + **input validation** (validator)
 - **Account lockout** progresif (5 percobaan gagal → kunci 15 menit, HTTP 429 + `Retry-After`) dengan audit log `login_failed` / `account_locked` / `login_blocked`
+- **Email notifications** (lettre, async SMTP over rustls): welcome email saat registrasi + alert email untuk deteksi berseveritas tinggi, dengan opt-in per organisasi
 
 ## Konfigurasi Environment
 
@@ -53,6 +54,15 @@ Salin `backend/.env.example` ke `backend/.env`, lalu sesuaikan:
 | `RATE_LIMIT_TRUST_PROXY` | `false` | `true` hanya jika reverse proxy **menimpa** `X-Forwarded-For` |
 | `LOGIN_MAX_FAILED_ATTEMPTS` | `5` | Jumlah percobaan login gagal sebelum akun dikunci (rentang 3–20) |
 | `LOGIN_LOCKOUT_SECONDS` | `900` | Lama penguncian akun dalam detik (rentang 60–86400) |
+| `SMTP_ENABLED` | `false` | Aktifkan email; tanpa ini semua pengiriman menjadi no-op |
+| `SMTP_HOST` / `SMTP_PORT` | *(kosong)* / `587` | Host & port SMTP |
+| `SMTP_TLS_MODE` | `starttls` | `starttls` (587), `implicit` (465), atau `none` (khusus dev lokal) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | *(kosong)* | Kredensial SMTP — jangan pernah di-commit |
+| `SMTP_FROM` | `CyberWatch IDS <no-reply@localhost>` | Alamat pengirim |
+| `ALERT_EMAIL_TO` | *(kosong)* | Penerima fallback bila tidak ada admin aktif |
+| `ALERT_EMAIL_MIN_SEVERITY` | `CRITICAL` | Ambang severity: `CRITICAL`/`HIGH`/`MEDIUM`/`LOW` |
+
+> **Email alert** hanya terkirim bila **dua** syarat terpenuhi: SMTP aktif di server **dan** toggle `emailAlerts` organisasi aktif (Admin → Organization). Penerima default adalah admin aktif organisasi. Semua pengiriman bersifat *fire-and-forget*, jadi kegagalan SMTP tidak pernah menggagalkan request.
 
 > **Catatan keamanan:** `RATE_LIMIT_TRUST_PROXY=true` hanya aman bila ada reverse proxy tepercaya yang *mengganti* (bukan sekadar menambahkan) header `X-Forwarded-For` / `X-Real-IP`. Jika tidak, client bisa memalsukan IP untuk melewati rate limit.
 
@@ -95,6 +105,7 @@ CyberWatchIDS/
 |   |   +-- db.rs           # 12 tables, migrations, r2d2 pool
 |   |   +-- auth.rs         # JWT, argon2, API keys
 |   |   +-- security.rs     # OWASP headers, CORS policy, input validation
+|   |   +-- mailer.rs       # Async SMTP email (welcome + alert), per-org opt-in
 |   |   +-- ids_engine.rs   # Regex IDS, event logging, IP reputation
 |   |   +-- simulator.rs    # 30+ attack templates
 |   |   +-- routes/         # auth, admin, ids, simulator, incidents, ws, health

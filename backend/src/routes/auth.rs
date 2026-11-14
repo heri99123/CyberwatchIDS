@@ -119,6 +119,17 @@ pub async fn register(
     // Audit log
     audit_log(&conn, &org_id, &user_id, &body.email, "register", "organization", &json!({"orgName": body.org_name}));
 
+    // Welcome email (fire-and-forget; SMTP is optional and never blocks signup).
+    if state.mailer.is_enabled() {
+        let (subject, html) = crate::mailer::welcome_email(&body.name, &body.org_name);
+        crate::mailer::spawn_send(
+            state.mailer.clone(),
+            vec![body.email.clone()],
+            subject,
+            html,
+        );
+    }
+
     Ok(Json(json!({
         "token": token,
         "user": {

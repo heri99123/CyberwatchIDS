@@ -58,6 +58,8 @@ Lihat tabel lengkap di [README.md](README.md#konfigurasi-environment). Ringkasan
 | `RATE_LIMIT_TRUST_PROXY` | `false` | `true` hanya jika proxy menimpa `X-Forwarded-For` |
 | `LOGIN_MAX_FAILED_ATTEMPTS` | `5` | Gagal login beruntun sebelum akun dikunci (3–20) |
 | `LOGIN_LOCKOUT_SECONDS` | `900` | Lama kunci akun, detik (60–86400) |
+| `SMTP_ENABLED` / `SMTP_HOST` | `false` / kosong | Email **nonaktif** by default; lihat tabel lengkap di README |
+| `ALERT_EMAIL_MIN_SEVERITY` | `CRITICAL` | Ambang severity email alert |
 
 > Rate limiting tidak diterapkan pada `/api/health`, `/ws`, dan static assets.
 > Rate limit berlaku **per IP**, sedangkan account lockout berlaku **per akun** — keduanya saling melengkapi. Counter lockout tersimpan di tabel `users` (`failed_login_attempts`, `locked_until`) dan otomatis di-reset saat login berhasil.

@@ -89,6 +89,28 @@ pub async fn attack(
                 "timestamp": chrono::Utc::now().to_rfc3339(),
             });
             state.broadcast("alerts", &alert, Some(&user.org_id)).await;
+
+            // Email alert (Task #27): org opt-in + severity threshold, fire-and-forget.
+            if state.mailer.is_enabled()
+                && crate::mailer::meets_threshold(&detection.severity, state.mailer.min_severity())
+                && crate::mailer::org_email_alerts_enabled(&state.db, &user.org_id)
+            {
+                let mut recipients = crate::mailer::org_alert_recipients(&state.db, &user.org_id);
+                if recipients.is_empty() {
+                    recipients = state.mailer.fallback_recipients().to_vec();
+                }
+                if !recipients.is_empty() {
+                    let (subject, html) = crate::mailer::alert_email(
+                        &detection.severity,
+                        &detection.attack_type,
+                        &detection.rule_name,
+                        &detection.source_ip,
+                        &detection.path,
+                        &chrono::Utc::now().to_rfc3339(),
+                    );
+                    crate::mailer::spawn_send(state.mailer.clone(), recipients, subject, html);
+                }
+            }
         }
     }
 
