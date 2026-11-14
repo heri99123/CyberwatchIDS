@@ -169,6 +169,8 @@ fn create_schema(conn: &rusqlite::Connection) -> Result<(), DbError> {
             role TEXT DEFAULT 'viewer',
             status TEXT DEFAULT 'active',
             last_login TEXT,
+            failed_login_attempts INTEGER DEFAULT 0,
+            locked_until INTEGER,
             created_at TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (org_id) REFERENCES organizations(id),
             UNIQUE(org_id, email)
@@ -242,6 +244,9 @@ fn run_migrations(conn: &rusqlite::Connection) -> Result<(), DbError> {
         "ALTER TABLE security_events ADD COLUMN org_id TEXT",
         "ALTER TABLE alerts ADD COLUMN org_id TEXT",
         "ALTER TABLE ip_reputation ADD COLUMN org_id TEXT",
+        // Account lockout (Task #26). Safe to re-run: duplicate-column errors are ignored.
+        "ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN locked_until INTEGER",
     ];
 
     for sql in &migrations {

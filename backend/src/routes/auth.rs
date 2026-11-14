@@ -30,6 +30,26 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+/// Progressive account-lockout policy (Task #26).
+/// Values are clamped so a typo in `.env` cannot disable lockout or lock users out for a year.
+const DEFAULT_MAX_FAILED_ATTEMPTS: i64 = 5;
+const DEFAULT_LOCKOUT_SECONDS: i64 = 900; // 15 minutes
+
+fn env_i64(name: &str, default: i64, min: i64, max: i64) -> i64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .map(|v| v.clamp(min, max))
+        .unwrap_or(default)
+}
+
+fn lockout_policy() -> (i64, i64) {
+    (
+        env_i64("LOGIN_MAX_FAILED_ATTEMPTS", DEFAULT_MAX_FAILED_ATTEMPTS, 3, 20),
+        env_i64("LOGIN_LOCKOUT_SECONDS", DEFAULT_LOCKOUT_SECONDS, 60, 86_400),
+    )
+}
+
 #[derive(Debug, Serialize)]
 pub struct AuthResponse {
     pub token: String,
@@ -127,29 +147,102 @@ pub async fn login(
         .map_err(|e| AppError::BadRequest(format!("Validation failed: {}", e)))?;
 
     let conn = get_conn(&state.db)?;
+    let (max_attempts, lockout_seconds) = lockout_policy();
+    let now = chrono::Utc::now().timestamp();
 
-    // Find user
+    // Find user. `locked_until` is a unix timestamp (seconds); NULL = not locked.
     let user_row = conn
         .query_row(
-            "SELECT id, org_id, email, name, password_hash, role, status FROM users WHERE email = ? AND status = 'active'",
+            "SELECT id, org_id, email, name, password_hash, role, status, \
+                    COALESCE(failed_login_attempts, 0), locked_until \
+             FROM users WHERE email = ? AND status = 'active'",
             [&body.email],
             |row| {
                 Ok((
-                    row.get::<_, String>(0)?,  // id
-                    row.get::<_, String>(1)?,  // org_id
-                    row.get::<_, String>(2)?,  // email
-                    row.get::<_, String>(3)?,  // name
-                    row.get::<_, String>(4)?,  // password_hash
-                    row.get::<_, String>(5)?,  // role
-                    row.get::<_, String>(6)?,  // status
+                    row.get::<_, String>(0)?,      // id
+                    row.get::<_, String>(1)?,      // org_id
+                    row.get::<_, String>(2)?,      // email
+                    row.get::<_, String>(3)?,      // name
+                    row.get::<_, String>(4)?,      // password_hash
+                    row.get::<_, String>(5)?,      // role
+                    row.get::<_, String>(6)?,      // status
+                    row.get::<_, i64>(7)?,         // failed_login_attempts
+                    row.get::<_, Option<i64>>(8)?, // locked_until
                 ))
             },
         )
-        .map_err(|_| AppError::Unauthorized)?;
+        .map_err(|_| {
+            // Burn roughly the same Argon2 work as a real verification so an
+            // unknown email cannot be distinguished by response timing.
+            let _ = auth::hash_password(&body.password);
+            AppError::Unauthorized
+        })?;
 
-    let (user_id, org_id, email, name, password_hash, role, _status) = user_row;
+    let (user_id, org_id, email, name, password_hash, role, _status, failed_attempts, locked_until) =
+        user_row;
+
+    // 1. Reject while an active lock is in force.
+    if let Some(until) = locked_until {
+        if until > now {
+            let retry_after = (until - now) as u64;
+            audit_log(
+                &conn,
+                &org_id,
+                &user_id,
+                &email,
+                "login_blocked",
+                "auth",
+                &json!({ "reason": "account_locked", "retryAfter": retry_after }),
+            );
+            return Err(AppError::AccountLocked {
+                retry_after_secs: retry_after,
+            });
+        }
+    }
+
+    // An expired lock starts a fresh window; otherwise keep the running counter.
+    let lock_expired = locked_until.is_some_and(|until| until <= now);
+    let attempts_before = if lock_expired { 0 } else { failed_attempts };
 
     if !auth::verify_password(&body.password, &password_hash) {
+        let attempts = attempts_before + 1;
+        if attempts >= max_attempts {
+            let until = now + lockout_seconds;
+            let _ = conn.execute(
+                "UPDATE users SET failed_login_attempts = 0, locked_until = ? WHERE id = ?",
+                rusqlite::params![until, user_id],
+            );
+            audit_log(
+                &conn,
+                &org_id,
+                &user_id,
+                &email,
+                "account_locked",
+                "auth",
+                &json!({ "failedAttempts": attempts, "lockoutSeconds": lockout_seconds }),
+            );
+            tracing::warn!(
+                "[Auth] Account locked for {} after {} failed attempts",
+                email,
+                attempts
+            );
+        } else {
+            let _ = conn.execute(
+                "UPDATE users SET failed_login_attempts = ?, locked_until = NULL WHERE id = ?",
+                rusqlite::params![attempts, user_id],
+            );
+            audit_log(
+                &conn,
+                &org_id,
+                &user_id,
+                &email,
+                "login_failed",
+                "auth",
+                &json!({ "failedAttempts": attempts }),
+            );
+        }
+        // Generic response on purpose: never disclose remaining attempts or
+        // whether the account exists.
         return Err(AppError::Unauthorized);
     }
 
@@ -158,8 +251,11 @@ pub async fn login(
         .query_row("SELECT name FROM organizations WHERE id = ?", [&org_id], |row| row.get(0))
         .map_err(|_| AppError::Internal("Organization not found".to_string()))?;
 
-    // Update last login
-    conn.execute("UPDATE users SET last_login = datetime('now') WHERE id = ?", [&user_id])?;
+    // Successful login clears the progressive lockout state.
+    conn.execute(
+        "UPDATE users SET last_login = datetime('now'), failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+        [&user_id],
+    )?;
 
     let token = auth::sign_jwt(&user_id, &email, &name, &role, &org_id, &org_name)?;
 

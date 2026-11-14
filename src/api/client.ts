@@ -36,6 +36,38 @@ export function setStoredUser(user: any) {
   localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
+// --- Structured API errors ---
+// The Rust backend returns { error, code, retryAfter? }. Keep that structure
+// so views can render specific messages (e.g. ACCOUNT_LOCKED) instead of raw JSON.
+export class ApiError extends Error {
+  status: number
+  code?: string
+  retryAfter?: number
+
+  constructor(status: number, message: string, code?: string, retryAfter?: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.retryAfter = retryAfter
+  }
+}
+
+async function toApiError(res: Response): Promise<ApiError> {
+  const raw = await res.text()
+  try {
+    const body = JSON.parse(raw)
+    return new ApiError(
+      res.status,
+      typeof body.error === 'string' ? body.error : `API ${res.status}`,
+      typeof body.code === 'string' ? body.code : undefined,
+      typeof body.retryAfter === 'number' ? body.retryAfter : undefined
+    )
+  } catch {
+    return new ApiError(res.status, raw || `API ${res.status}`)
+  }
+}
+
 // --- Fetch with auth header ---
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const token = getToken()
@@ -49,14 +81,16 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
     headers['Content-Type'] = 'application/json'
   }
   const res = await fetch(url, { ...options, headers })
-  if (res.status === 401) {
+  // A 401 from login/register means "wrong credentials", NOT an expired session.
+  // Only auto-logout for authenticated endpoints to avoid redirecting the login form.
+  const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register')
+  if (res.status === 401 && !isAuthEndpoint) {
     clearToken()
     window.location.hash = '#/login'
-    throw new Error('Session expired. Please login again.')
+    throw new ApiError(401, 'Sesi berakhir. Silakan login kembali.', 'SESSION_EXPIRED')
   }
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`API ${res.status}: ${body}`)
+    throw await toApiError(res)
   }
   return res.json() as Promise<T>
 }

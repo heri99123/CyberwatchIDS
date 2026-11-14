@@ -35,6 +35,7 @@ CyberWatch IDS adalah sistem deteksi intrusi (IDS) berbasis web untuk monitoring
 - **Rate limiting per IP** (tower-governor) untuk semua endpoint `/api/*`
 - **OWASP security headers** (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS opsional)
 - **CORS restrictif** (same-origin by default) + **input validation** (validator)
+- **Account lockout** progresif (5 percobaan gagal → kunci 15 menit, HTTP 429 + `Retry-After`) dengan audit log `login_failed` / `account_locked` / `login_blocked`
 
 ## Konfigurasi Environment
 
@@ -50,6 +51,8 @@ Salin `backend/.env.example` ke `backend/.env`, lalu sesuaikan:
 | `RATE_LIMIT_PER_SECOND` | `2` | Interval replenish 1 token (detik) |
 | `RATE_LIMIT_BURST` | `30` | Maksimum burst per IP |
 | `RATE_LIMIT_TRUST_PROXY` | `false` | `true` hanya jika reverse proxy **menimpa** `X-Forwarded-For` |
+| `LOGIN_MAX_FAILED_ATTEMPTS` | `5` | Jumlah percobaan login gagal sebelum akun dikunci (rentang 3–20) |
+| `LOGIN_LOCKOUT_SECONDS` | `900` | Lama penguncian akun dalam detik (rentang 60–86400) |
 
 > **Catatan keamanan:** `RATE_LIMIT_TRUST_PROXY=true` hanya aman bila ada reverse proxy tepercaya yang *mengganti* (bukan sekadar menambahkan) header `X-Forwarded-For` / `X-Real-IP`. Jika tidak, client bisa memalsukan IP untuk melewati rate limit.
 

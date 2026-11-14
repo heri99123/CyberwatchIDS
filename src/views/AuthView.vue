@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { authApi, setToken, setStoredUser } from '@/api/client'
+import { authApi, setToken, setStoredUser, ApiError } from '@/api/client'
 
 const emit = defineEmits<{ (e: 'auth-success'): void }>()
 
@@ -35,7 +35,16 @@ async function handleLogin() {
     setStoredUser(result.user)
     emit('auth-success')
   } catch (e: any) {
-    error.value = e.message || 'Login gagal. Periksa email dan password Anda.'
+    if (e instanceof ApiError && e.code === 'ACCOUNT_LOCKED') {
+      const seconds = e.retryAfter ?? 900
+      const minutes = Math.max(1, Math.ceil(seconds / 60))
+      error.value = `Akun dikunci sementara karena terlalu banyak percobaan gagal. Coba lagi dalam ±${minutes} menit.`
+    } else if (e instanceof ApiError && e.status === 401) {
+      // Generic on purpose — never reveal whether the email exists.
+      error.value = 'Email atau password salah.'
+    } else {
+      error.value = e.message || 'Login gagal. Periksa email dan password Anda.'
+    }
   } finally {
     loading.value = false
   }

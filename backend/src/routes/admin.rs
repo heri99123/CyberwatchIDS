@@ -3,6 +3,7 @@ use axum::http::HeaderMap;
 use axum::Json;
 use serde::Deserialize;
 use serde_json::{json, Value};
+use validator::Validate;
 
 use crate::auth;
 use crate::db::get_conn;
@@ -10,10 +11,14 @@ use crate::error::{AppError, AppResult};
 use crate::routes::auth::{audit_log, extract_auth_user};
 use crate::state::SharedState;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateUserRequest {
+    #[validate(email(message = "Invalid email format"))]
     pub email: String,
+    #[validate(length(min = 2, max = 100, message = "Name must be 2-100 characters"))]
     pub name: String,
+    // Keep in sync with RegisterRequest / LoginRequest (Task #26).
+    #[validate(length(min = 8, max = 128, message = "Password must be at least 8 characters"))]
     pub password: String,
     pub role: Option<String>,
 }
@@ -34,8 +39,9 @@ pub struct UpdateOrgRequest {
     pub settings: Option<Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Validate)]
 pub struct CreateApiKeyRequest {
+    #[validate(length(min = 1, max = 100, message = "Name must be 1-100 characters"))]
     pub name: String,
     pub permissions: Option<String>,
 }
@@ -75,12 +81,8 @@ pub async fn create_user(
 ) -> AppResult<Json<Value>> {
     let user = require_admin(&headers)?;
 
-    if body.email.is_empty() || body.name.is_empty() || body.password.is_empty() {
-        return Err(AppError::BadRequest("email, name, password required".to_string()));
-    }
-    if body.password.len() < 6 {
-        return Err(AppError::BadRequest("Password must be at least 6 characters".to_string()));
-    }
+    body.validate()
+        .map_err(|e| AppError::BadRequest(format!("Validation failed: {}", e)))?;
 
     let conn = get_conn(&state.db)?;
 
@@ -289,9 +291,8 @@ pub async fn create_api_key(
 ) -> AppResult<Json<Value>> {
     let user = require_admin(&headers)?;
 
-    if body.name.is_empty() {
-        return Err(AppError::BadRequest("Name required".to_string()));
-    }
+    body.validate()
+        .map_err(|e| AppError::BadRequest(format!("Validation failed: {}", e)))?;
 
     let conn = get_conn(&state.db)?;
     let key_id = auth::gen_id("key_");

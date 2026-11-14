@@ -226,7 +226,7 @@ const statusColors: Record<string, string> = {
         <form @submit.prevent="handleCreateUser" class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input v-model="newUser.name" type="text" placeholder="Nama" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none" required />
           <input v-model="newUser.email" type="email" placeholder="Email" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none" required />
-          <input v-model="newUser.password" type="password" placeholder="Password" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none" required />
+          <input v-model="newUser.password" type="password" placeholder="Password (min. 8 karakter)" minlength="8" maxlength="128" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none" required />
           <div class="flex gap-2">
             <select v-model="newUser.role" class="px-3 py-2 bg-cyber-bg border border-cyber-border rounded-md text-sm text-cyber-text focus:border-cyber-accent focus:outline-none">
               <option value="viewer">Viewer</option>
