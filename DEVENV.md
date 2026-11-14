@@ -28,7 +28,7 @@ Codespaces akan otomatis:
 
 ### Prerequisites
 - Node.js 18+
-- Rust toolchain (https://rustup.rs)
+- **Rust 1.85+** (https://rustup.rs) — wajib, karena dependency memakai edition 2024
 - gcc / build-essential (untuk rusqlite bundled)
 
 ### Commands

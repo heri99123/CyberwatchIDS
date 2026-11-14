@@ -21,7 +21,7 @@ https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=heri99123/
 
 Atau setup lokal:
 - Node.js 18+
-- Rust toolchain (https://rustup.rs)
+- Rust 1.85+ (https://rustup.rs) — dependency memakai edition 2024
 - gcc / build-essential
 
 ### 3. Buat Branch Baru

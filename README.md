@@ -4,7 +4,7 @@
 
 [![Build](https://github.com/heri99123/CyberwatchIDS/actions/workflows/build.yml/badge.svg)](https://github.com/heri99123/CyberwatchIDS/actions/workflows/build.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Rust](https://img.shields.io/badge/Rust-1.82+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.85+-orange.svg)](https://www.rust-lang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.0+-green.svg)](https://vuejs.org/)
 
 ## Tentang
@@ -19,7 +19,7 @@ CyberWatch IDS adalah sistem deteksi intrusi (IDS) berbasis web untuk monitoring
 | **Backend** | Rust + Axum 0.7 + tokio + rusqlite (bundled) + r2d2 |
 | **Auth** | jsonwebtoken + argon2 |
 | **Database** | SQLite (rusqlite native binding) |
-| **Deployment** | Docker multi-stage (rust:1.82 -> debian:bookworm-slim) |
+| **Deployment** | Docker multi-stage (rust:1.100.0-bookworm -> debian:bookworm-slim) |
 
 ## Fitur
 

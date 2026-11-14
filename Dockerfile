@@ -1,6 +1,8 @@
 # Multi-stage Dockerfile for CyberWatch IDS Rust Backend
 # Stage 1: Build Rust binary
-FROM rust:1.82-bookworm AS builder
+# Rust >= 1.85 is REQUIRED: transitive deps (e.g. cpufeatures 0.3) use edition
+# 2024, which Cargo 1.82 cannot parse. Pinned to match the CI stable toolchain.
+FROM rust:1.100.0-bookworm AS builder
 
 WORKDIR /build
 
