@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="CyberWatch IDS — real-time security monitoring and intrusion detection dashboard with CVE reference database.">
+<title>CyberWatch IDS — Security Monitoring &amp; Intrusion Detection</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%2300d4ff' d='M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- Top Navigation -->
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5 4 6v6.2c0 4.7 3.2 8.9 8 10.3 4.8-1.4 8-5.6 8-10.3V6l-8-3.5Z"
+            fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M12 8v4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+      <circle cx="12" cy="15.9" r="1.05" fill="currentColor"/>
+    </svg>
+    <span class="brand-name">CyberWatch<span class="brand-sub">IDS</span></span>
+  </div>
+
+  <nav class="nav-links" aria-label="Main sections">
+    <button class="nav-btn active" data-tab="dashboard" aria-current="page">Dashboard</button>
+    <button class="nav-btn" data-tab="cve">CVE Database</button>
+    <button class="nav-btn" data-tab="events">Events</button>
+    <button class="nav-btn" data-tab="alerts">Alerts</button>
+    <button class="nav-btn" data-tab="rules">Rules</button>
+    <button class="nav-btn" data-tab="iprep">IP Reputation</button>
+  </nav>
+
+  <div class="status-indicator" role="status" aria-live="polite">
+    <span class="status-dot live" aria-hidden="true"></span>
+    <span id="connection-status">Connected</span>
+  </div>
+</header>
+
+<!-- Main Container -->
+<main class="container" id="main">
+
+  <!-- ==================== DASHBOARD TAB ==================== -->
+  <section id="tab-dashboard" class="tab-content active">
+
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Security Overview</h1>
+        <p class="page-sub">Real-time intrusion detection telemetry</p>
+      </div>
+      <div class="page-meta">
+        <span class="dot-live" aria-hidden="true"></span>
+        Updated <time id="last-updated">—</time>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-total-events">0</div>
+          <div class="stat-label">Total Events</div>
+        </div>
+      </div>
+      <div class="stat-card stat-critical">
+        <span class="stat-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 2.8 19.2h18.4L12 3.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 9.4v4.2" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="16.4" r="1.05" fill="currentColor"/></svg>
+        </span>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-critical">0</div>
+          <div class="stat-label">Critical Threats</div>
+        </div>
+      </div>
+      <div class="stat-card stat-high">
+        <span class="stat-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H11l-1 8.5 9-11.5h-6.4L13 2Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        </span>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-high">0</div>
+          <div class="stat-label">High Severity</div>
+        </div>
+      </div>
+      <div class="stat-card stat-blocked">
+        <span class="stat-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 4 6v6.2c0 4.7 3.2 8.9 8 10.3 4.8-1.4 8-5.6 8-10.3V6l-8-3.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.6 11.9 2.4 2.4 4.4-4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-blocked">0</div>
+          <div class="stat-label">Blocked Attacks</div>
+        </div>
+      </div>
+      <div class="stat-card stat-attackers">
+        <span class="stat-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.2 19.4c0-3.2 2.6-5.2 5.8-5.2s5.8 2 5.8 5.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M16.2 5.2a3.2 3.2 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M17.6 14.6c2 .5 3.4 2.1 3.4 4.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-attackers">0</div>
+          <div class="stat-label">Unique Attackers</div>
+        </div>
+      </div>
+      <div class="stat-card stat-alerts">
+        <span class="stat-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8.6a6 6 0 1 0-12 0c0 5-2 6.4-2 6.4h16s-2-1.4-2-6.4Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10.3 19a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </span>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-alerts">0</div>
+          <div class="stat-label">Active Alerts</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="panel panel-timeline">
+      <div class="panel-header">
+        <h2>Attack Timeline</h2>
+        <span class="panel-meta">Last 24 hours</span>
+      </div>
+      <div class="panel-body">
+        <div class="chart-wrap">
+          <canvas id="timeline-chart" role="img" aria-label="Bar chart of attack volume over the last 24 hours"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Attack types & attackers -->
+    <div class="charts-row">
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Top Attack Types</h2>
+          <span class="panel-meta" id="attack-types-total"></span>
+        </div>
+        <div class="panel-body">
+          <div id="attack-types-chart" class="bar-chart"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header">
+          <h2>Top Attacker IPs</h2>
+        </div>
+        <div class="panel-body">
+          <div id="top-attackers" class="list-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Feed -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Live Security Feed</h2>
+        <span class="badge live-badge">LIVE</span>
+      </div>
+      <div class="panel-body">
+        <div class="event-feed" id="live-feed" role="log" aria-live="polite">
+          <div class="empty-state">Waiting for security events…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CVE matches -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2>CVE References in Attacks</h2>
+      </div>
+      <div class="panel-body">
+        <div id="cve-matches" class="list-container"></div>
+      </div>
+    </div>
+
+    <!-- Simulator Control -->
+    <div class="panel simulator-panel">
+      <div class="panel-header">
+        <h2>Attack Simulator</h2>
+        <div class="sim-controls">
+          <span id="sim-status" class="badge badge-idle">Idle</span>
+          <button id="sim-start" class="btn btn-success btn-sm">Start Simulation</button>
+          <button id="sim-stop" class="btn btn-danger btn-sm" disabled>Stop</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <p class="sim-desc">Generates realistic attack traffic to exercise the detection engine. The simulator injects SQL injection, XSS, path traversal, Log4j, XXE, OGNL, SSRF, and scanner payloads. It does not send traffic over the network — events are produced directly by the detection engine.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CVE DATABASE TAB ==================== -->
+  <section id="tab-cve" class="tab-content">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">CVE Database</h1>
+        <p class="page-sub">Web &amp; runtime vulnerability reference</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Search Vulnerabilities</h2>
+        <span class="panel-meta"><span id="cve-result-count">0</span> results</span>
+      </div>
+      <div class="panel-body">
+        <div class="search-bar">
+          <input type="search" id="cve-search" placeholder="Search by CVE ID, title, product, or tag…" class="search-input" aria-label="Search CVE database">
+          <select id="cve-severity-filter" class="filter-select" aria-label="Filter by severity">
+            <option value="ALL">All severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          <button id="cve-search-btn" class="btn btn-primary">Search</button>
+        </div>
+        <div id="cve-list" class="cve-list"></div>
+      </div>
+    </div>
+
+    <!-- CVE Detail Modal -->
+    <div id="cve-modal" class="modal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="cve-modal-title">
+      <div class="modal-content modal-wide">
+        <div class="modal-header">
+          <h2 id="cve-modal-title">CVE Details</h2>
+          <button class="modal-close" type="button" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="modal-body" id="cve-modal-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== EVENTS TAB ==================== -->
+  <section id="tab-events" class="tab-content">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Security Events</h1>
+        <p class="page-sub">Detection log from the IDS middleware</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Event Log</h2>
+        <div class="panel-actions">
+          <span class="panel-meta"><span id="events-count">0</span> rows</span>
+          <button id="refresh-events" class="btn btn-ghost btn-sm">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="filter-bar">
+          <select id="events-severity-filter" class="filter-select" aria-label="Filter by severity">
+            <option value="">All severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          <input type="text" id="events-ip-filter" placeholder="Filter by source IP…" class="filter-input" aria-label="Filter by source IP">
+          <button id="events-filter-btn" class="btn btn-primary btn-sm">Apply</button>
+          <button id="events-reset-btn" class="btn btn-ghost btn-sm">Reset</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Severity</th>
+                <th>Attack Type</th>
+                <th>Source IP</th>
+                <th>Rule</th>
+                <th>CVE</th>
+                <th>Action</th>
+                <th>Path</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== ALERTS TAB ==================== -->
+  <section id="tab-alerts" class="tab-content">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Alerts</h1>
+        <p class="page-sub">Unacknowledged detections requiring triage</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Active Alerts</h2>
+        <div class="panel-actions">
+          <span class="panel-meta"><span id="alerts-count">0</span> open</span>
+          <button id="refresh-alerts" class="btn btn-ghost btn-sm">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="alerts-list" class="alerts-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== IDS RULES TAB ==================== -->
+  <section id="tab-rules" class="tab-content">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Detection Rules</h1>
+        <p class="page-sub">Regex signatures applied to every incoming request</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>IDS Rules</h2>
+        <div class="panel-actions">
+          <span class="panel-meta"><span id="rules-count">0</span> rules</span>
+          <button id="refresh-rules" class="btn btn-ghost btn-sm">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="rules-grid" id="rules-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== IP REPUTATION TAB ==================== -->
+  <section id="tab-iprep" class="tab-content">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">IP Reputation</h1>
+        <p class="page-sub">Accumulated threat score per source address</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Threat Intelligence</h2>
+        <div class="panel-actions">
+          <span class="panel-meta"><span id="iprep-count">0</span> addresses</span>
+          <button id="refresh-iprep" class="btn btn-ghost btn-sm">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>IP Address</th>
+                <th>Threat Score</th>
+                <th>Level</th>
+                <th>Events</th>
+                <th>Last Seen</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="iprep-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

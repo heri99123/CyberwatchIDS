@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CyberWatch IDS — Custom theme overrides */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-cyber-bg text-cyber-text;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-cyber-bg;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-cyber-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-cyber-borderlight;
+  }
+
+  /* Focus visible */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-cyber-accent ring-offset-1 ring-offset-cyber-bg;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-cyber-card border border-cyber-border rounded-lg overflow-hidden;
+  }
+
+  .card-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-cyber-border;
+  }
+
+  .card-body {
+    @apply p-4;
+  }
+
+  .btn {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-150;
+  }
+  .btn-primary {
+    @apply bg-cyber-accent/15 text-cyber-accent border border-cyber-accent/30 hover:bg-cyber-accent/25;
+  }
+  .btn-danger {
+    @apply bg-cyber-danger/15 text-cyber-danger border border-cyber-danger/30 hover:bg-cyber-danger/25;
+  }
+  .btn-ghost {
+    @apply text-cyber-textdim hover:text-cyber-text hover:bg-cyber-border/30;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide;
+  }
+  .badge-critical { @apply bg-cyber-critical/15 text-cyber-critical; }
+  .badge-high { @apply bg-cyber-high/15 text-cyber-high; }
+  .badge-medium { @apply bg-cyber-medium/15 text-cyber-medium; }
+  .badge-low { @apply bg-cyber-low/15 text-cyber-low; }
+  .badge-info { @apply bg-cyber-info/15 text-cyber-info; }
+
+  .input {
+    @apply bg-cyber-bg border border-cyber-border rounded-md px-3 py-1.5 text-sm text-cyber-text placeholder-cyber-textmuted focus:border-cyber-accent transition-colors;
+  }
+
+  .severity-dot {
+    @apply inline-block w-2 h-2 rounded-full;
+  }
+  .severity-dot.critical { @apply bg-cyber-critical; }
+  .severity-dot.high { @apply bg-cyber-high; }
+  .severity-dot.medium { @apply bg-cyber-medium; }
+  .severity-dot.low { @apply bg-cyber-low; }
+
+  /* Live indicator */
+  .live-dot {
+    @apply inline-flex items-center gap-1.5 text-[11px] text-cyber-low font-semibold uppercase;
+  }
+  .live-dot::before {
+    content: '';
+    @apply w-2 h-2 rounded-full bg-cyber-low animate-pulse;
+  }
+
+  /* Table styles */
+  .cyber-table {
+    @apply w-full text-sm;
+  }
+  .cyber-table thead {
+    @apply sticky top-0 bg-cyber-card z-10;
+  }
+  .cyber-table th {
+    @apply text-left px-3 py-2 text-cyber-textdim font-medium text-xs uppercase tracking-wide border-b border-cyber-border;
+  }
+  .cyber-table td {
+    @apply px-3 py-2 border-b border-cyber-border/50;
+  }
+  .cyber-table tbody tr:hover {
+    @apply bg-cyber-border/20;
+  }
+
+  /* Toggle switch */
+  .toggle {
+    @apply relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer;
+  }
+  .toggle.on { @apply bg-cyber-accent/60; }
+  .toggle.off { @apply bg-cyber-borderlight; }
+  .toggle-knob {
+    @apply inline-block h-4 w-4 transform rounded-full bg-white transition-transform;
+  }
+  .toggle.on .toggle-knob { @apply translate-x-4; }
+  .toggle.off .toggle-knob { @apply translate-x-0.5; }
+}
+
+/* ECharts dark theme overrides */
+.echarts-tooltip-dark {
+  background: rgba(10, 14, 20, 0.95) !important;
+  border: 1px solid #1e2a3a !important;
+  color: #e0e6ed !important;
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Animations */
+.animate-fade-in { animation: fadeIn 0.3s ease-out; }
+.animate-slide-up { animation: slideUp 0.3s ease-out; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* New event flash in feed */
+@keyframes flashRow {
+  0% { background-color: rgba(0, 217, 255, 0.12); }
+  100% { background-color: transparent; }
+}
+.flash-row {
+  animation: flashRow 0.8s ease-out;
+}

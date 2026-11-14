@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+server-rust/target/
+
+# Environment
+.env
+.env.local
+.env.*.local
+server-rust/.env
+
+# Database
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+docker-data/
+
+# WorkBuddy internal
+.wbapp_*.genie
+.workbuddy/
+.workbuddy-ai/
+
+# Screenshots / temp images
+*.png
+!public/**/*.png
+
+# Cargo lock is kept for binary projects
+# (uncomment if you want to ignore it)
+# server-rust/Cargo.lock

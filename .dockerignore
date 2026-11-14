@@ -1,0 +1,9 @@
+# CyberWatch IDS - Rust Backend .dockerignore
+node_modules/
+client/
+src/
+*.md
+.git
+.wbapp_*
+target/
+server-rust/target/

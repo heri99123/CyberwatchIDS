@@ -1,0 +1,33 @@
+{
+  "name": "cyber-watch-ids",
+  "version": "2.0.0",
+  "description": "Security Monitoring & Intrusion Detection System with CVE Database Reference",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node server/index.js",
+    "dev:all": "concurrently \"npm run dev:server\" \"npm run dev\"",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "seed": "node server/seed-cve.js",
+    "preview": "vite preview",
+    "postinstall": "vite build"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "echarts": "^5.5.0",
+    "express": "^4.18.2",
+    "sql.js": "^1.10.3",
+    "vue": "^3.4.0",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "autoprefixer": "^10.4.0",
+    "concurrently": "^8.2.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}
