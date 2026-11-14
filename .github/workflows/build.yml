@@ -28,19 +28,19 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            server-rust/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('server-rust/Cargo.lock', 'server-rust/Cargo.toml') }}
+            backend/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('backend/Cargo.lock', 'backend/Cargo.toml') }}
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Build Rust backend (release)
-        working-directory: server-rust
+        working-directory: backend
         run: cargo build --release
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: cyberwatch-ids-binary
-          path: server-rust/target/release/cyberwatch-ids
+          path: backend/target/release/cyberwatch-ids
           retention-days: 30
 
   # ===== FRONTEND BUILD =====

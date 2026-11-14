@@ -5,7 +5,7 @@ FROM rust:1.82-bookworm AS builder
 WORKDIR /build
 
 # Copy Cargo files first for dependency caching
-COPY server-rust/Cargo.toml server-rust/Cargo.lock* ./
+COPY backend/Cargo.toml backend/Cargo.lock* ./
 
 # Create a dummy src/main.rs to build dependencies first
 RUN mkdir -p src/routes && \
@@ -14,8 +14,8 @@ RUN mkdir -p src/routes && \
     cargo build --release || true
 
 # Copy actual source code
-COPY server-rust/src/ src/
-COPY server-rust/.env .env
+COPY backend/src/ src/
+COPY backend/.env .env
 
 # Build the actual binary
 RUN cargo build --release

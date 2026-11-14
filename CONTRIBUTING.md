@@ -61,7 +61,7 @@ Dengan berkontribusi, Anda menyetujui bahwa kontribusi Anda akan dilisensikan di
 
 ## Code Style
 
-### Rust (server-rust/)
+### Rust (backend/)
 - Gunakan `cargo fmt` sebelum commit
 - Hilangkan warnings: `cargo clippy -- -D warnings`
 - Semua `query_row` harus menggunakan closure
@@ -76,7 +76,7 @@ Dengan berkontribusi, Anda menyetujui bahwa kontribusi Anda akan dilisensikan di
 
 ```bash
 # Rust backend
-cd server-rust
+cd backend
 cargo test
 
 # Frontend

@@ -24,6 +24,6 @@ npm install
 
 # Build Rust backend to cache dependencies
 echo "Building Rust backend (this caches deps)..."
-cd server-rust && cargo build --release 2>&1 || echo "Build will complete on first run"
+cd backend && cargo build --release 2>&1 || echo "Build will complete on first run"
 
 echo "=== Setup complete ==="

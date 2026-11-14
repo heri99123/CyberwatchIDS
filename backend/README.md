@@ -28,7 +28,7 @@ High-performance Rust backend for CyberWatch IDS, built with Axum + tokio + rusq
 ## Project Structure
 
 ```
-server-rust/
+backend/
   Cargo.toml          # Dependencies and build profile
   .env                # Environment configuration
   build.sh            # Linux build script
@@ -60,7 +60,7 @@ server-rust/
 
 ### Linux / VPS
 ```bash
-cd server-rust
+cd backend
 cargo build --release
 ./target/release/cyberwatch-ids
 ```
@@ -75,7 +75,7 @@ docker run -p 8421:8421 -v $(pwd)/data:/app/data cyberwatch-ids
 ### Windows
 Requires Visual Studio C++ Build Tools (for rusqlite bundled SQLite compilation).
 ```powershell
-cd server-rust
+cd backend
 cargo build --release
 ```
 

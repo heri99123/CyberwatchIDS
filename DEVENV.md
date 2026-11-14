@@ -40,7 +40,7 @@ npm install
 npm run dev
 
 # Backend (another terminal)
-cd server-rust
+cd backend
 cargo run --release
 ```
 
@@ -51,7 +51,7 @@ cargo run --release
 npm run build
 
 # Rust backend (Linux/macOS)
-cd server-rust && cargo build --release
+cd backend && cargo build --release
 
 # Docker image
 docker build -t cyberwatch-ids .

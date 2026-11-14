@@ -47,7 +47,7 @@ npm install
 npm run dev
 
 # Backend (butuh Rust toolchain + gcc)
-cd server-rust
+cd backend
 cargo run --release
 ```
 
@@ -66,7 +66,7 @@ CyberWatchIDS/
 |   +-- views/              # Dashboard, Alerts, Events, CVE, Rules, Simulator
 |   +-- api/                # TypeScript API client + WebSocket
 |   +-- composables/        # Vue composables (useStore)
-+-- server-rust/            # Rust backend
++-- backend/               # Rust backend
 |   +-- src/
 |   |   +-- main.rs         # Axum router, 35+ routes
 |   |   +-- db.rs           # 12 tables, migrations, r2d2 pool

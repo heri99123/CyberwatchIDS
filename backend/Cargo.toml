@@ -46,12 +46,28 @@ futures-util = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Rate limiting (Task #25)
+tower-governor = "0.5"
+
+# Email notifications (Task #27)
+lettre = { version = "0.11", default-features = false, features = ["smtp", "rustls-tls", "builder"] }
+
+# TLS for production HTTPS (Task #42)
+axum-server = { version = "0.7", features = ["tls-rustls"] }
+rustls = "0.23"
+rustls-pemfile = "2.2"
+
+# Report export (Task #31)
+csv = "1.3"
+
 # Utilities
 uuid = { version = "1.11", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 anyhow = "1.0"
 thiserror = "1.0"
+async-trait = "0.1"
+validator = { version = "0.18", features = ["derive"] }
 
 [profile.release]
 opt-level = 3
